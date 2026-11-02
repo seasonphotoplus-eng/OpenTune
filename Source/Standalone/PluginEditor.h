@@ -134,6 +134,7 @@ public:
     void guideBatchNotesRequested() override;
     void guideBatchSnapRequested() override;
     void guideShowKeysRequested() override;
+    void guideUseSelectedTrackRequested() override;
     void guideAutoAlignRequested() override;
     void guideNudgeRequested(int milliseconds) override;
     void onboardingRequested() override;
@@ -290,7 +291,16 @@ private:
         int trackId = -1;
         StandaloneArrangement::Placement placement;
     };
-    std::vector<GuidePlacementRef> collectGuideTargetPlacements(bool includeHarmony) const;
+    std::vector<GuidePlacementRef> collectGuideTargetPlacements(bool includeHarmony, bool includeGuide = false) const;
+    // お手本はトラックとして読み込み（歌と同じ解析経路）、解析後にお手本へ変換する
+    int guideTrackId_ = -1;              // お手本にしたトラック（ミュート・補正対象外）
+    int pendingGuideTrackId_ = -1;       // 読み込み・解析待ちのお手本トラック
+    int importReservedTracks_ = 0;       // 読み込み待ちで予約済みのトラック数（先頭から）
+    bool pendingGuideInteractive_ = false;
+    double pendingGuideStartMs_ = 0.0;
+    int importFilesToNewTracks(const juce::Array<juce::File>& files);   // 戻り値 = 最初のトラック番号（失敗 -1）
+    bool setGuideFromTrack(int trackId, juce::String& errorOut);
+    void pollPendingGuideTrack();
     juce::String describeGuideKeys() const;
     struct GuideBatchStats { int created = 0, hadNotes = 0, notReady = 0, clips = 0, moved = 0; };
     GuideBatchStats runGuideBatchNotes();
@@ -312,7 +322,6 @@ private:
     void guideWizardSetStep(GuideWizardStep step);
     void guideWizardTick();
     void guideWizardFinish(bool ok, const juce::String& message);
-    void importFilesToNewTracks(const juce::Array<juce::File>& files);
     void layoutGuideOverlays();
     void updateGhostClips();
     int ghostClipsTick_ = 0;

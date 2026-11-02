@@ -1649,6 +1649,8 @@ void OpenTuneAudioProcessorEditor::timerCallback()
     if (guideWizardStep_ != GuideWizardStep::Idle && guideWizardStep_ != GuideWizardStep::Done
         && guideWizardStep_ != GuideWizardStep::Failed)
         guideWizardTick();
+    if (pendingGuideTrackId_ >= 0 && (ghostClipsTick_ % 4) == 0)
+        pollPendingGuideTrack();
     if (pianoRoll_.isShowing() && (++ghostClipsTick_ % 8) == 0)
         updateGhostClips();
 
@@ -3937,7 +3939,7 @@ bool isHarmonyPlacementName(const juce::String& name)
 } // namespace
 
 std::vector<OpenTuneAudioProcessorEditor::GuidePlacementRef>
-OpenTuneAudioProcessorEditor::collectGuideTargetPlacements(bool includeHarmony) const
+OpenTuneAudioProcessorEditor::collectGuideTargetPlacements(bool includeHarmony, bool includeGuide) const
 {
     std::vector<GuidePlacementRef> out;
     auto* arrangement = processorRef_.getStandaloneArrangement();
@@ -3951,6 +3953,8 @@ OpenTuneAudioProcessorEditor::collectGuideTargetPlacements(bool includeHarmony) 
             if (!arrangement->getPlacementByIndex(t, i, p) || p.isRetired || !p.isValid())
                 continue;
             if (!includeHarmony && isHarmonyPlacementName(p.name))
+                continue;
+            if (!includeGuide && (t == guideTrackId_ || t == pendingGuideTrackId_))
                 continue;
             out.push_back({ t, p });
         }
@@ -4104,7 +4108,7 @@ void OpenTuneAudioProcessorEditor::exportAllTracksRequested()
                 found = true;
             }
         }
-        if (!found)
+        if (!found || t == guideTrackId_)
             continue;
 
         juce::String base;
@@ -4352,20 +4356,24 @@ void OpenTuneAudioProcessorEditor::guideWizardRequested()
         &contentRoot_);
 }
 
-void OpenTuneAudioProcessorEditor::importFilesToNewTracks(const juce::Array<juce::File>& files)
+int OpenTuneAudioProcessorEditor::importFilesToNewTracks(const juce::Array<juce::File>& files)
 {
     auto* arrangement = processorRef_.getStandaloneArrangement();
     if (arrangement == nullptr || files.isEmpty())
-        return;
+        return -1;
     // 最後に使われているトラックの次から並べる（曲頭 0 秒にそろえる）
     int firstFree = 0;
     for (int t = 0; t < OpenTuneAudioProcessor::MAX_TRACKS; ++t)
         if (arrangement->getNumPlacements(t) > 0)
             firstFree = t + 1;
+    // まだ読み込み中のファイル用に予約したトラックも避ける
+    if (!isImportInProgress_ && importQueue_.empty())
+        importReservedTracks_ = 0;
+    firstFree = juce::jmax(firstFree, importReservedTracks_);
     const int count = juce::jmin(files.size(), OpenTuneAudioProcessor::MAX_TRACKS - firstFree);
     if (count <= 0) {
         ConfirmDialogContent::showMessage(&contentRoot_, LOC(kImportFailed), LOC(kNoAvailableTracksAfterCurrent));
-        return;
+        return -1;
     }
     const int required = firstFree + count;
     if (required > trackPanel_.getVisibleTrackCount()) {
@@ -4379,6 +4387,8 @@ void OpenTuneAudioProcessorEditor::importFilesToNewTracks(const juce::Array<juce
         pending.file = files[i];
         queuePendingImport(std::move(pending));
     }
+    importReservedTracks_ = firstFree + count;
+    return firstFree;
 }
 
 void OpenTuneAudioProcessorEditor::guideWizardChooseVocals()
@@ -4402,7 +4412,7 @@ void OpenTuneAudioProcessorEditor::guideWizardChooseVocals()
 
 void OpenTuneAudioProcessorEditor::guideWizardChooseGuideThenStart()
 {
-    if (pianoRoll_.hasGuide() || guideAnalysisInProgress_) {
+    if (pianoRoll_.hasGuide() || guideAnalysisInProgress_ || pendingGuideTrackId_ >= 0) {
         guideWizardStart();
         return;
     }
@@ -4418,7 +4428,12 @@ void OpenTuneAudioProcessorEditor::guideWizardChooseGuideThenStart()
     {
         if (safeThis == nullptr || files.isEmpty())
             return;
-        safeThis->startGuideImport(files.getFirst(), false);
+        const int track = safeThis->importFilesToNewTracks(files);
+        if (track < 0)
+            return;
+        safeThis->pendingGuideTrackId_ = track;
+        safeThis->pendingGuideInteractive_ = false;
+        safeThis->pendingGuideStartMs_ = juce::Time::getMillisecondCounterHiRes();
         safeThis->guideWizardStart();
     });
 }
@@ -4517,7 +4532,7 @@ void OpenTuneAudioProcessorEditor::guideWizardTick()
         }
         case GuideWizardStep::WaitAnalysis: {
             int total = 0, ready = 0, failed = 0;
-            for (const auto& ref : collectGuideTargetPlacements(true)) {
+            for (const auto& ref : collectGuideTargetPlacements(true, true)) {
                 ++total;
                 const auto snap = processorRef_.getContentSnapshot(ref.placement.contentKey);
                 if (snap == nullptr)
@@ -4549,7 +4564,9 @@ void OpenTuneAudioProcessorEditor::guideWizardTick()
             return;
         }
         case GuideWizardStep::WaitGuide: {
-            if (guideAnalysisInProgress_) {
+            if (pendingGuideTrackId_ >= 0)
+                pollPendingGuideTrack();
+            if (guideAnalysisInProgress_ || pendingGuideTrackId_ >= 0) {
                 guideWizardPanel_->setDetail(LOC(kGuideWizDetailGuide) + waitText);
                 return;
             }
@@ -4622,7 +4639,7 @@ void OpenTuneAudioProcessorEditor::guideShowKeysRequested()
 
 void OpenTuneAudioProcessorEditor::guideImportRequested()
 {
-    if (guideAnalysisInProgress_) {
+    if (guideAnalysisInProgress_ || pendingGuideTrackId_ >= 0) {
         ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), LOC(kGuideAnalyzing));
         return;
     }
@@ -4639,8 +4656,138 @@ void OpenTuneAudioProcessorEditor::guideImportRequested()
     {
         if (safeThis == nullptr || selectedFiles.isEmpty())
             return;
-        safeThis->startGuideImport(selectedFiles.getFirst(), true);
+        // お手本も歌と同じく新しいトラックに読み込み、解析が終わったらお手本に変換する
+        const int track = safeThis->importFilesToNewTracks(selectedFiles);
+        if (track < 0)
+            return;
+        AppLogger::log("[Guide] import as track " + juce::String(track) + ": " + selectedFiles.getFirst().getFullPathName());
+        safeThis->pendingGuideTrackId_ = track;
+        safeThis->pendingGuideInteractive_ = true;
+        safeThis->pendingGuideStartMs_ = juce::Time::getMillisecondCounterHiRes();
+        ConfirmDialogContent::showMessage(&safeThis->contentRoot_, LOC(kGuideMenu),
+                                          LOC(kGuideAnalyzing) + "\n" + selectedFiles.getFirst().getFileName()
+                                              + "\n\n" + LOC(kGuideAnalyzingHint));
     });
+}
+
+void OpenTuneAudioProcessorEditor::guideUseSelectedTrackRequested()
+{
+    const int track = getStandaloneActiveTrack(processorRef_);
+    juce::String error;
+    if (track < 0 || !setGuideFromTrack(track, error)) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu),
+                                          error.isNotEmpty() ? error : LOC(kGuideUseTrackNone));
+        return;
+    }
+    ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideKeys),
+                                      describeGuideKeys() + "\n" + LOC(kGuideKeysHint) + "\n\n" + LOC(kGuideTrackMutedHint));
+}
+
+bool OpenTuneAudioProcessorEditor::setGuideFromTrack(int trackId, juce::String& errorOut)
+{
+    auto* arrangement = processorRef_.getStandaloneArrangement();
+    if (arrangement == nullptr || trackId < 0 || trackId >= OpenTuneAudioProcessor::MAX_TRACKS) {
+        errorOut = LOC(kGuideUseTrackNone);
+        return false;
+    }
+    std::vector<GuideNote> guide;
+    bool anyClip = false;
+    const int n = arrangement->getNumPlacements(trackId);
+    for (int i = 0; i < n; ++i) {
+        StandaloneArrangement::Placement p;
+        if (!arrangement->getPlacementByIndex(trackId, i, p) || p.isRetired || !p.isValid())
+            continue;
+        anyClip = true;
+        auto snap = processorRef_.getContentSnapshot(p.contentKey);
+        if (snap == nullptr || snap->originalF0State != OriginalF0State::Ready || !snap->hasUsableOriginalF0()) {
+            errorOut = LOC(kGuideBatchNotReady) + " 1";
+            return false;
+        }
+        if (snap->notes.empty()) {
+            processorRef_.generateNotesOnlyByContentKey(p.contentKey, pianoRoll_.getCurrentAutoTuneParams());
+            snap = processorRef_.getContentSnapshot(p.contentKey);
+            if (snap == nullptr)
+                continue;
+        }
+        const auto projection = makePianoRollProjection(p, processorRef_);
+        for (const auto& note : snap->notes) {
+            const float hz = note.originalPitch > 0.0f ? note.originalPitch : note.pitch;
+            if (!note.isVoiced || hz <= 0.0f || note.endTime <= note.startTime)
+                continue;
+            const double t0 = projection.projectContentTimeToTimeline(snap->timeGrid->tauForward(note.startTime));
+            const double t1 = projection.projectContentTimeToTimeline(snap->timeGrid->tauForward(note.endTime));
+            if (t1 <= p.timelineStartSeconds || t0 >= p.timelineEndSeconds())
+                continue;
+            guide.push_back({ std::max(t0, p.timelineStartSeconds), std::min(t1, p.timelineEndSeconds()),
+                              PitchUtils::freqToMidi(hz) });
+        }
+    }
+    if (!anyClip) {
+        errorOut = LOC(kGuideUseTrackNone);
+        return false;
+    }
+    if (guide.empty()) {
+        errorOut = LOC(kGuideFailed) + "\nno notes found in guide track";
+        return false;
+    }
+    AppLogger::log("[Guide] guide from track " + juce::String(trackId) + " notes=" + juce::String(static_cast<int>(guide.size())));
+    pianoRoll_.setGuideNotes(std::move(guide));
+    pianoRoll_.setGuideVisible(true);
+    guideTrackId_ = trackId;
+    // お手本トラックは聞こえないようにミュート（補正・書き出しの対象外）
+    arrangement->setTrackMuted(trackId, true);
+    trackPanel_.setTrackMuted(trackId, true);
+    updateGhostClips();
+    return true;
+}
+
+void OpenTuneAudioProcessorEditor::pollPendingGuideTrack()
+{
+    if (pendingGuideTrackId_ < 0)
+        return;
+    const int track = pendingGuideTrackId_;
+    auto* arrangement = processorRef_.getStandaloneArrangement();
+    if (arrangement == nullptr)
+        return;
+    // 読み込み待ち
+    if (arrangement->getNumPlacements(track) == 0) {
+        if (!isImportInProgress_ && importQueue_.empty()) {
+            pendingGuideTrackId_ = -1;
+            guideLastError_ = LOC(kGuideFailed);
+            if (pendingGuideInteractive_)
+                ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), guideLastError_);
+        }
+        return;
+    }
+    // 解析待ち
+    for (int i = 0; i < arrangement->getNumPlacements(track); ++i) {
+        StandaloneArrangement::Placement p;
+        if (!arrangement->getPlacementByIndex(track, i, p) || !p.isValid())
+            continue;
+        const auto snap = processorRef_.getContentSnapshot(p.contentKey);
+        if (snap == nullptr)
+            return;
+        if (snap->originalF0State == OriginalF0State::Failed) {
+            pendingGuideTrackId_ = -1;
+            guideLastError_ = LOC(kGuideFailed) + "\n" + juce::String(snap->originalF0FailureReason);
+            if (pendingGuideInteractive_)
+                ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), guideLastError_);
+            return;
+        }
+        if (snap->originalF0State != OriginalF0State::Ready)
+            return;
+    }
+    pendingGuideTrackId_ = -1;
+    juce::String error;
+    if (!setGuideFromTrack(track, error)) {
+        guideLastError_ = error;
+        if (pendingGuideInteractive_)
+            ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), error);
+        return;
+    }
+    if (pendingGuideInteractive_)
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideKeys),
+                                          describeGuideKeys() + "\n" + LOC(kGuideKeysHint) + "\n\n" + LOC(kGuideTrackMutedHint));
 }
 
 void OpenTuneAudioProcessorEditor::startGuideImport(const juce::File& file, bool interactive)
@@ -4701,6 +4848,7 @@ void OpenTuneAudioProcessorEditor::startGuideImport(const juce::File& file, bool
 void OpenTuneAudioProcessorEditor::guideClearRequested()
 {
     pianoRoll_.setGuideNotes({});
+    guideTrackId_ = -1;
 }
 
 void OpenTuneAudioProcessorEditor::guideVisibleToggled(bool shouldShow)

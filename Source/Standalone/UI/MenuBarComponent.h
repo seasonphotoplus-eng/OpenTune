@@ -78,6 +78,7 @@ public:
         virtual void guideBatchSnapRequested() {}
         virtual void guideShowKeysRequested() {}
         virtual void guideWizardRequested() {}
+        virtual void guideUseSelectedTrackRequested() {}
         virtual void showAllTracksToggled(bool show) { juce::ignoreUnused(show); }
         virtual void guideAutoAlignRequested() {}
         virtual void guideNudgeRequested(int milliseconds) { juce::ignoreUnused(milliseconds); }  // 0 = リセット
@@ -197,6 +198,7 @@ private:
         GuideShowKeys,
         GuideAutoAlign,
         GuideWizard,
+        GuideUseSelectedTrack,
         GuideShowAllTracks,
         GuideNudgeEarly10,
         GuideNudgeLate10,
