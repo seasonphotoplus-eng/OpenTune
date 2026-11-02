@@ -225,7 +225,11 @@ public:
     const std::vector<GuideNote>& getGuideNotes() const noexcept { return guideNotes_; }
     void setGuideVisible(bool visible);
     bool isGuideVisible() const noexcept { return guideVisible_; }
-    bool hasGuide() const noexcept { return !guideNotes_.empty(); }
+    bool hasGuide() const noexcept { return !guideRawNotes_.empty(); }
+    /** お手本の時間ずらし量（秒、+ で遅く）。キー判定・表示・スナップすべてに反映される。 */
+    void setGuideOffsetSeconds(double offsetSeconds);
+    double getGuideOffsetSeconds() const noexcept { return guideOffsetSeconds_; }
+    const std::vector<GuideNote>& getGuideRawNotes() const noexcept { return guideRawNotes_; }
     /** お手本から判定したキー区間（転調を含む）。お手本が無ければ空。 */
     const std::vector<GuideKeySegment>& getGuideKeySegments() const noexcept { return guideKeySegments_; }
     /** 選択ノート（無選択なら全ノート）をお手本の音名に合わせる（オクターブは現在位置に最も近いもの）。戻り値=変更数 */
@@ -584,8 +588,11 @@ private:
     juce::Colour trackDisplayColour_{0xFF4A90D9};
 
     // [GuideHarmony]
-    std::vector<GuideNote> guideNotes_;
+    std::vector<GuideNote> guideRawNotes_;     // 読み込んだまま（ずらし前）
+    std::vector<GuideNote> guideNotes_;        // ずらし後（表示・スナップ・キー判定に使う）
     std::vector<GuideKeySegment> guideKeySegments_;
+    double guideOffsetSeconds_ = 0.0;
+    void rebuildGuideFromOffset();
     bool guideVisible_ = true;
     float computeGuideOctaveShift() const;
     void drawGuideNotes(juce::Graphics& g, const ViewMapper& mapper, float pixelsPerSemitone, int height) const;

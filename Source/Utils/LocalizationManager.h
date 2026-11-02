@@ -197,6 +197,17 @@ constexpr const char* kExportAllChooseFolder = "Choose a folder for the exported
 constexpr const char* kExportAllDone = "Exported tracks:";
 constexpr const char* kExportAllFailed = "Failed:";
 constexpr const char* kExportAllNothing = "There are no tracks with audio to export.";
+constexpr const char* kGuideTiming = "Guide Timing";
+constexpr const char* kGuideAutoAlign = "Auto-align Guide to Vocals";
+constexpr const char* kGuideNudgeEarly10 = "10 ms Earlier  ( [ )";
+constexpr const char* kGuideNudgeLate10 = "10 ms Later  ( ] )";
+constexpr const char* kGuideNudgeEarly100 = "100 ms Earlier  ( Shift+[ )";
+constexpr const char* kGuideNudgeLate100 = "100 ms Later  ( Shift+] )";
+constexpr const char* kGuideNudgeReset = "Reset Guide Timing";
+constexpr const char* kGuideAlignDone = "Guide shifted by";
+constexpr const char* kGuideAlignMatch = "pitch match";
+constexpr const char* kGuideAlignFailed = "Could not find a reliable alignment. Wait until the vocal clips finish analyzing, or adjust by hand with [ and ].";
+constexpr const char* kGuideNudgeHint = "Fine-tune in the piano roll with [ / ] (10 ms) or Shift+[ / ] (100 ms).";
 constexpr const char* kGuideBatchSnap = "Snap ALL Clips to Guide (auto-create notes)";
 constexpr const char* kGuideBatchNotes = "Create Notes for All Clips";
 constexpr const char* kGuideBatchNotesDone = "Clips with new notes:";
@@ -574,6 +585,17 @@ inline juce::String get(Language lang, const char* key)
         { Keys::kExportAllDone, "Exported tracks:", "已导出音轨：", "書き出したトラック:", "Экспортировано:", "Pistas exportadas:" },
         { Keys::kExportAllFailed, "Failed:", "失败：", "失敗:", "Ошибка:", "Fallos:" },
         { Keys::kExportAllNothing, "There are no tracks with audio to export.", "没有可导出的音轨。", "書き出せるトラックがありません。", "Нет дорожек для экспорта.", "No hay pistas para exportar." },
+        { Keys::kGuideTiming, "Guide Timing", "参考时间对齐", "お手本の位置調整", "Сдвиг гида", "Ajuste de la guía" },
+        { Keys::kGuideAutoAlign, "Auto-align Guide to Vocals", "自动对齐参考", "歌に合わせて自動で位置を合わせる", "Автовыравнивание гида", "Alinear guía automáticamente" },
+        { Keys::kGuideNudgeEarly10, "10 ms Earlier  ( [ )", "提前 10 ms  ( [ )", "10ms 早く  ( [ )", "На 10 мс раньше  ( [ )", "10 ms antes  ( [ )" },
+        { Keys::kGuideNudgeLate10, "10 ms Later  ( ] )", "延后 10 ms  ( ] )", "10ms 遅く  ( ] )", "На 10 мс позже  ( ] )", "10 ms después  ( ] )" },
+        { Keys::kGuideNudgeEarly100, "100 ms Earlier  ( Shift+[ )", "提前 100 ms  ( Shift+[ )", "100ms 早く  ( Shift+[ )", "На 100 мс раньше", "100 ms antes" },
+        { Keys::kGuideNudgeLate100, "100 ms Later  ( Shift+] )", "延后 100 ms  ( Shift+] )", "100ms 遅く  ( Shift+] )", "На 100 мс позже", "100 ms después" },
+        { Keys::kGuideNudgeReset, "Reset Guide Timing", "重置参考时间", "お手本の位置を元に戻す", "Сбросить сдвиг", "Restablecer ajuste" },
+        { Keys::kGuideAlignDone, "Guide shifted by", "参考已移动", "お手本をずらしました:", "Гид сдвинут на", "Guía desplazada" },
+        { Keys::kGuideAlignMatch, "pitch match", "音名一致", "音名の一致", "совпадение", "coincidencia" },
+        { Keys::kGuideAlignFailed, "Could not find a reliable alignment. Wait until the vocal clips finish analyzing, or adjust by hand with [ and ].", "无法可靠对齐。请等待分析完成，或用 [ ] 手动调整。", "うまく合わせられませんでした。歌の解析が終わるまで待つか、[ と ] キーで手動で調整してください。", "Не удалось выровнять. Используйте [ и ].", "No se pudo alinear. Usa [ y ]." },
+        { Keys::kGuideNudgeHint, "Fine-tune in the piano roll with [ / ] (10 ms) or Shift+[ / ] (100 ms).", "可在钢琴卷帘中用 [ / ] (10ms)、Shift+[ / ] (100ms) 微调。", "ピアノロールで [ / ] キー（10ms）、Shift+[ / ]（100ms）で微調整できます。", "Точная настройка: [ / ] (10 мс), Shift+[ / ] (100 мс).", "Ajuste fino: [ / ] (10 ms), Shift+[ / ] (100 ms)." },
         { Keys::kGuideBatchSnap, "Snap ALL Clips to Guide (auto-create notes)", "全部片段吸附到参考（自动生成音符）", "全クリップをお手本に合わせる（ノートも自動作成）", "Привязать все клипы к гиду", "Ajustar todos los clips a la guía" },
         { Keys::kGuideBatchNotes, "Create Notes for All Clips", "为全部片段生成音符", "全クリップのノートを作成", "Создать ноты для всех клипов", "Crear notas en todos los clips" },
         { Keys::kGuideBatchNotesDone, "Clips with new notes:", "已生成音符的片段：", "ノートを作成したクリップ:", "Клипы с новыми нотами:", "Clips con notas nuevas:" },

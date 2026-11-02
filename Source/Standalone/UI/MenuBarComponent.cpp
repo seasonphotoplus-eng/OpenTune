@@ -153,6 +153,15 @@ juce::PopupMenu MenuBarComponent::getMenuForIndex(int topLevelMenuIndex, const j
                 guideMenu.addItem(GuideImport, LOC(kGuideImport));
                 guideMenu.addItem(GuideShow, LOC(kGuideShow), hasGuide, guideVisible);
                 guideMenu.addItem(GuideShowKeys, LOC(kGuideKeys), hasGuide);
+                juce::PopupMenu nudgeMenu;
+                nudgeMenu.addItem(GuideAutoAlign, LOC(kGuideAutoAlign), hasGuide);
+                nudgeMenu.addSeparator();
+                nudgeMenu.addItem(GuideNudgeEarly10, LOC(kGuideNudgeEarly10), hasGuide);
+                nudgeMenu.addItem(GuideNudgeLate10, LOC(kGuideNudgeLate10), hasGuide);
+                nudgeMenu.addItem(GuideNudgeEarly100, LOC(kGuideNudgeEarly100), hasGuide);
+                nudgeMenu.addItem(GuideNudgeLate100, LOC(kGuideNudgeLate100), hasGuide);
+                nudgeMenu.addItem(GuideNudgeReset, LOC(kGuideNudgeReset), hasGuide);
+                guideMenu.addSubMenu(LOC(kGuideTiming), nudgeMenu, hasGuide);
                 guideMenu.addItem(GuideClear, LOC(kGuideClear), hasGuide);
                 guideMenu.addSeparator();
                 guideMenu.addItem(GuideBatchSnap, LOC(kGuideBatchSnap), hasGuide);
@@ -314,6 +323,14 @@ void MenuBarComponent::menuItemSelected(int menuItemID, int topLevelMenuIndex)
         case GuideBatchSnap:
             listeners_.call([](Listener& l) { l.guideBatchSnapRequested(); });
             break;
+        case GuideAutoAlign:
+            listeners_.call([](Listener& l) { l.guideAutoAlignRequested(); });
+            break;
+        case GuideNudgeEarly10:  listeners_.call([](Listener& l) { l.guideNudgeRequested(-10); }); break;
+        case GuideNudgeLate10:   listeners_.call([](Listener& l) { l.guideNudgeRequested(+10); }); break;
+        case GuideNudgeEarly100: listeners_.call([](Listener& l) { l.guideNudgeRequested(-100); }); break;
+        case GuideNudgeLate100:  listeners_.call([](Listener& l) { l.guideNudgeRequested(+100); }); break;
+        case GuideNudgeReset:    listeners_.call([](Listener& l) { l.guideNudgeRequested(0); }); break;
         case GuideShowKeys:
             listeners_.call([](Listener& l) { l.guideShowKeysRequested(); });
             break;

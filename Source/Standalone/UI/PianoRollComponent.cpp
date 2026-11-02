@@ -5671,6 +5671,22 @@ bool PianoRollComponent::keyPressed(const juce::KeyPress& key) {
     if (handleViewportShortcut(key))
         return true;
 
+    // [GuideHarmony] [ / ] : お手本を 10ms 早く / 遅く（Shift 付きで 100ms）
+    if (hasGuide() && !key.getModifiers().isCommandDown() && !key.getModifiers().isAltDown()) {
+        const auto c = key.getTextCharacter();
+        const int kc = key.getKeyCode();
+        const bool shift = key.getModifiers().isShiftDown();
+        double delta = 0.0;
+        if (c == '[' || (kc == '[' && !shift)) delta = -0.01;
+        else if (c == ']' || (kc == ']' && !shift)) delta = 0.01;
+        else if (c == '{' || (kc == '[' && shift)) delta = -0.1;
+        else if (c == '}' || (kc == ']' && shift)) delta = 0.1;
+        if (delta != 0.0) {
+            setGuideOffsetSeconds(guideOffsetSeconds_ + delta);
+            return true;
+        }
+    }
+
     // [GuideHarmony] Ctrl+Shift+G: お手本の音名に合わせる
     if (hasGuide()
         && key == juce::KeyPress('G', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier, 0)) {
@@ -6257,9 +6273,35 @@ ViewMapper PianoRollComponent::makeViewMapperForView(const ViewportState& view) 
 // ============================================================================
 void PianoRollComponent::setGuideNotes(std::vector<GuideNote> notes)
 {
-    guideNotes_ = std::move(notes);
-    std::sort(guideNotes_.begin(), guideNotes_.end(),
+    guideRawNotes_ = std::move(notes);
+    std::sort(guideRawNotes_.begin(), guideRawNotes_.end(),
               [](const GuideNote& a, const GuideNote& b) { return a.startSeconds < b.startSeconds; });
+    guideOffsetSeconds_ = 0.0;
+    rebuildGuideFromOffset();
+}
+
+void PianoRollComponent::setGuideOffsetSeconds(double offsetSeconds)
+{
+    offsetSeconds = juce::jlimit(-10.0, 10.0, offsetSeconds);
+    if (std::abs(offsetSeconds - guideOffsetSeconds_) < 1e-6)
+        return;
+    guideOffsetSeconds_ = offsetSeconds;
+    rebuildGuideFromOffset();
+}
+
+void PianoRollComponent::rebuildGuideFromOffset()
+{
+    guideNotes_ = guideRawNotes_;
+    for (auto& n : guideNotes_) {
+        n.startSeconds += guideOffsetSeconds_;
+        n.endSeconds += guideOffsetSeconds_;
+    }
+    // 0 秒より前にはみ出したお手本は捨てる（一部だけはみ出す音は 0 秒から）
+    guideNotes_.erase(std::remove_if(guideNotes_.begin(), guideNotes_.end(),
+                                     [](const GuideNote& n) { return n.endSeconds <= 0.0; }),
+                      guideNotes_.end());
+    for (auto& n : guideNotes_)
+        n.startSeconds = std::max(0.0, n.startSeconds);
     guideKeySegments_ = estimateGuideKeySegments(guideNotes_);
     requestContentRedraw();
 }
@@ -6319,6 +6361,14 @@ void PianoRollComponent::drawGuideNotes(juce::Graphics& g, const ViewMapper& map
 
     // お手本から判定したキー（転調位置）を上端に表示
     g.setFont(UIColors::getUIFontExact(12.0f, juce::Font::plain));
+    if (std::abs(guideOffsetSeconds_) > 1e-6) {
+        const auto offsetText = juce::String::fromUTF8("お手本 ")
+            + (guideOffsetSeconds_ > 0 ? "+" : "") + juce::String(guideOffsetSeconds_ * 1000.0, 0) + " ms";
+        g.setColour(juce::Colour::fromRGBA(20, 24, 32, 200));
+        g.fillRoundedRectangle(static_cast<float>(clip.getRight() - 132), 20.0f, 128.0f, 16.0f, 3.0f);
+        g.setColour(juce::Colour::fromRGBA(200, 200, 200, 255));
+        g.drawText(offsetText, clip.getRight() - 128, 20, 122, 16, juce::Justification::centredRight, false);
+    }
     for (const auto& seg : guideKeySegments_) {
         const int x = mapper.timeToX(seg.startSeconds);
         if (x > clip.getRight())

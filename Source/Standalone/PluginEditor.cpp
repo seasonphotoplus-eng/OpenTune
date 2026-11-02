@@ -4161,6 +4161,58 @@ void OpenTuneAudioProcessorEditor::exportAllTracksRequested()
     });
 }
 
+void OpenTuneAudioProcessorEditor::guideAutoAlignRequested()
+{
+    if (!pianoRoll_.hasGuide()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), LOC(kGuideNeedGuide));
+        return;
+    }
+    // 全クリップ（ハモリ以外）の歌の音程を、タイムライン時刻つきで集める（10ms 間隔に間引き）
+    std::vector<GuideVocalPoint> vocal;
+    for (const auto& ref : collectGuideTargetPlacements(false)) {
+        const auto snap = processorRef_.getContentSnapshot(ref.placement.contentKey);
+        if (snap == nullptr || !snap->hasUsableOriginalF0())
+            continue;
+        const auto& f0 = snap->pitchCurve->getOriginalF0();
+        const double frameSec = static_cast<double>(snap->pitchCurve->getHopSize()) / snap->pitchCurve->getSampleRate();
+        const int stride = std::max(1, static_cast<int>(std::lround(0.01 / frameSec)));
+        const auto projection = makePianoRollProjection(ref.placement, processorRef_);
+        const double clipStart = ref.placement.timelineStartSeconds;
+        const double clipEnd = ref.placement.timelineEndSeconds();
+        for (size_t i = 0; i < f0.size(); i += static_cast<size_t>(stride)) {
+            if (f0[i] <= 0.0f)
+                continue;
+            const double t = projection.projectContentTimeToTimeline(snap->timeGrid->tauForward(static_cast<double>(i) * frameSec));
+            if (t < clipStart || t > clipEnd)
+                continue;
+            vocal.push_back({ t, PitchUtils::freqToMidi(f0[i]) });
+        }
+    }
+
+    double confidence = 0.0;
+    const double offset = estimateGuideOffset(pianoRoll_.getGuideRawNotes(), vocal, confidence);
+    if (vocal.size() < 50 || confidence < 0.3) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), LOC(kGuideAlignFailed));
+        return;
+    }
+    pianoRoll_.setGuideOffsetSeconds(offset);
+    juce::String msg;
+    msg << LOC(kGuideAlignDone) << " " << (offset > 0 ? "+" : "") << juce::String(offset * 1000.0, 0) << " ms"
+        << "  (" << LOC(kGuideAlignMatch) << " " << juce::String(confidence * 100.0, 0) << "%)\n\n"
+        << LOC(kGuideNudgeHint);
+    ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), msg);
+}
+
+void OpenTuneAudioProcessorEditor::guideNudgeRequested(int milliseconds)
+{
+    if (!pianoRoll_.hasGuide())
+        return;
+    if (milliseconds == 0)
+        pianoRoll_.setGuideOffsetSeconds(0.0);
+    else
+        pianoRoll_.setGuideOffsetSeconds(pianoRoll_.getGuideOffsetSeconds() + milliseconds / 1000.0);
+}
+
 void OpenTuneAudioProcessorEditor::guideShowKeysRequested()
 {
     if (!pianoRoll_.hasGuide()) {

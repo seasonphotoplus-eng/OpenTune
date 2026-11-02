@@ -77,6 +77,8 @@ public:
         virtual void guideBatchNotesRequested() {}
         virtual void guideBatchSnapRequested() {}
         virtual void guideShowKeysRequested() {}
+        virtual void guideAutoAlignRequested() {}
+        virtual void guideNudgeRequested(int milliseconds) { juce::ignoreUnused(milliseconds); }  // 0 = リセット
     };
 
     explicit MenuBarComponent(OpenTuneAudioProcessor& processor, Profile profile = Profile::Standalone);
@@ -190,6 +192,12 @@ private:
         GuideBatchNotes,
         GuideBatchSnap,
         GuideShowKeys,
+        GuideAutoAlign,
+        GuideNudgeEarly10,
+        GuideNudgeLate10,
+        GuideNudgeEarly100,
+        GuideNudgeLate100,
+        GuideNudgeReset,
         Harmony3rdUp = 310,
         Harmony3rdDown,
         Harmony4thDown,

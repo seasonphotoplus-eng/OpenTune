@@ -283,6 +283,90 @@ inline std::vector<GuideKeySegment> estimateGuideKeySegments(const std::vector<G
 }
 
 
+
+// ============================================================================
+// お手本の時間ズレ推定：歌（全クリップの F0）とお手本の音名が最も一致する時間ずらし量を探す。
+// ============================================================================
+
+/** 歌の 1 フレーム（タイムライン秒、MIDI）。 */
+struct GuideVocalPoint {
+    double timeSeconds = 0.0;
+    float midi = 0.0f;
+};
+
+/** お手本を offset 秒ずらしたとき、歌と音名が一致する割合が最大になる offset を返す（-maxShift〜+maxShift）。
+ *  outConfidence には「一致率」(0〜1) を入れる。歌の点が少なすぎるときは 0 を返す。 */
+inline double estimateGuideOffset(const std::vector<GuideNote>& guide,
+                                  const std::vector<GuideVocalPoint>& vocal,
+                                  double& outConfidence,
+                                  double maxShiftSeconds = 1.0,
+                                  double stepSeconds = 0.01)
+{
+    outConfidence = 0.0;
+    if (guide.empty() || vocal.size() < 50)
+        return 0.0;
+
+    // お手本を stepSeconds 刻みのピッチクラス列にする（-1 = 無音）
+    double end = 0.0;
+    for (const auto& n : guide)
+        end = std::max(end, n.endSeconds);
+    const int gridLen = static_cast<int>(std::ceil(end / stepSeconds)) + 1;
+    std::vector<int> grid(static_cast<size_t>(gridLen), -1);
+    for (const auto& n : guide) {
+        const int pc = ((static_cast<int>(std::lround(n.midi)) % 12) + 12) % 12;
+        const int a = std::max(0, static_cast<int>(std::floor(n.startSeconds / stepSeconds)));
+        const int b = std::min(gridLen, static_cast<int>(std::ceil(n.endSeconds / stepSeconds)));
+        for (int i = a; i < b; ++i)
+            grid[static_cast<size_t>(i)] = pc;
+    }
+
+    // 歌のピッチクラス（半音の中間付近 = 音程があいまいな点は除く）
+    std::vector<std::pair<double, int>> pts;
+    pts.reserve(vocal.size());
+    for (const auto& v : vocal) {
+        const float frac = v.midi - std::round(v.midi);
+        if (std::abs(frac) > 0.35f)
+            continue;
+        pts.emplace_back(v.timeSeconds, ((static_cast<int>(std::lround(v.midi)) % 12) + 12) % 12);
+    }
+    if (pts.size() < 50)
+        return 0.0;
+
+    const int maxSteps = static_cast<int>(std::lround(maxShiftSeconds / stepSeconds));
+    std::vector<double> scores;
+    std::vector<double> confs;
+    scores.reserve(static_cast<size_t>(2 * maxSteps + 1));
+    for (int k = -maxSteps; k <= maxSteps; ++k) {
+        const double offset = k * stepSeconds;
+        int match = 0, active = 0, silent = 0;
+        for (const auto& [t, pc] : pts) {
+            // お手本を +offset ずらす = 歌の時刻 t では、元のお手本の t - offset を見る
+            const int idx = static_cast<int>(std::floor((t - offset) / stepSeconds));
+            const int g = (idx >= 0 && idx < gridLen) ? grid[static_cast<size_t>(idx)] : -1;
+            if (g < 0) { ++silent; continue; }
+            ++active;
+            if (g == pc)
+                ++match;
+        }
+        // 音名一致を加点、不一致・お手本の無音に歌が乗ることを減点
+        scores.push_back(match - 0.5 * (active - match) - 0.3 * silent);
+        confs.push_back(active > 0 ? static_cast<double>(match) / active : 0.0);
+    }
+    int best = 0;
+    for (int i = 1; i < static_cast<int>(scores.size()); ++i)
+        if (scores[static_cast<size_t>(i)] > scores[static_cast<size_t>(best)])
+            best = i;
+    // 同じ最高点が続く平らな所は、その真ん中を採る
+    const double tol = std::max(1.0, 0.002 * std::abs(scores[static_cast<size_t>(best)]));
+    int lo = best, hi = best;
+    while (lo > 0 && scores[static_cast<size_t>(lo - 1)] >= scores[static_cast<size_t>(best)] - tol) --lo;
+    while (hi + 1 < static_cast<int>(scores.size()) && scores[static_cast<size_t>(hi + 1)] >= scores[static_cast<size_t>(best)] - tol) ++hi;
+    const int centre = (lo + hi) / 2;
+    outConfidence = confs[static_cast<size_t>(centre)];
+    const double bestOffset = (centre - maxSteps) * stepSeconds;
+    return bestOffset;
+}
+
 /** 調号 root（メジャー主音）で degreeSteps 度移動した MIDI。 */
 inline float diatonicShiftMidiInKey(float currentMidi, int majorRoot, int degreeSteps)
 {

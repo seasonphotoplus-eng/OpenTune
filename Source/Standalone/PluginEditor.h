@@ -129,6 +129,8 @@ public:
     void guideBatchNotesRequested() override;
     void guideBatchSnapRequested() override;
     void guideShowKeysRequested() override;
+    void guideAutoAlignRequested() override;
+    void guideNudgeRequested(int milliseconds) override;
     void onboardingRequested() override;
 
     // TransportBarComponent::Listener
