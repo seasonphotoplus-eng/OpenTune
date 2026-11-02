@@ -864,6 +864,70 @@ void PianoRollToolHandler::moveSelectedNotesPitchByKeyboard(int direction)
     }
 }
 
+int PianoRollToolHandler::retargetNotesPitch(
+    const std::function<std::optional<float>(const Note& note, float currentMidi)>& targetFn,
+    const juce::String& undoDescription)
+{
+    const auto& notes = committedNotes(ctx_);
+    if (notes.empty() || !targetFn)
+        return 0;
+
+    auto indices = collectSelectedNoteIndices(notes);
+    if (indices.empty()) {
+        indices.reserve(notes.size());
+        for (int i = 0; i < static_cast<int>(notes.size()); ++i)
+            indices.push_back(i);
+    }
+
+    std::vector<Note> workingNotes = notes;
+    double rangeStart = std::numeric_limits<double>::max();
+    double rangeEnd = std::numeric_limits<double>::lowest();
+    std::vector<std::pair<int, float>> changedOffsets;
+    for (int noteIndex : indices) {
+        auto& note = workingNotes[static_cast<size_t>(noteIndex)];
+        if (!note.isVoiced || note.pitch <= 0.0f)
+            continue;
+        const float baseMidi = PitchUtils::freqToMidi(note.pitch);
+        const float initialOffset = note.pitchOffset;
+        const auto target = targetFn(note, baseMidi + initialOffset);
+        if (!target.has_value())
+            continue;
+        const float finalOffset = *target - baseMidi;
+        if (std::abs(finalOffset - initialOffset) <= 0.001f)
+            continue;
+        note.pitchOffset = finalOffset;
+        note.dirty = true;
+        changedOffsets.emplace_back(noteIndex, initialOffset);
+        rangeStart = std::min(rangeStart, note.startTime);
+        rangeEnd = std::max(rangeEnd, note.endTime);
+    }
+    if (changedOffsets.empty())
+        return 0;
+
+    const F0FrameRange editRange = ctx_.getF0Timeline().rangeForTimes(rangeStart, rangeEnd);
+    const auto contentSnapshot = ctx_.getEditableContentSnapshot();
+    if (editRange.isEmpty() || contentSnapshot == nullptr || contentSnapshot->pitchCurve == nullptr)
+        return 0;
+
+    ctx_.beginNoteDraft();
+    auto& draft = ctx_.getNoteDraft();
+    draft.contentDirty = true;
+    draft.workingNotes = workingNotes;
+    ctx_.setUndoDescription(undoDescription);
+    const bool committed = commitNoteBasedCorrection(ctx_, workingNotes, editRange);
+    ctx_.clearNoteDraft();
+    if (!committed) {
+        ctx_.setUndoDescription({});
+        return 0;
+    }
+
+    for (const auto& [noteIndex, oldOffset] : changedOffsets) {
+        ctx_.notifyNoteOffsetChanged(static_cast<size_t>(noteIndex), oldOffset,
+                                     workingNotes[static_cast<size_t>(noteIndex)].pitchOffset);
+    }
+    return static_cast<int>(changedOffsets.size());
+}
+
 bool PianoRollToolHandler::isEmptySpaceMouseDown(const juce::MouseEvent& e)
 {
     if (e.x < ctx_.getPianoKeyWidth()) {

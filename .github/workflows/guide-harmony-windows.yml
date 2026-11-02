@@ -1,0 +1,63 @@
+name: GuideHarmony Windows build
+
+# お手本(MELO)表示・ハモリ作成を追加した版の Windows ビルド（署名なし・ポータブル zip）。
+# guide-harmony ブランチへの push、または手動実行で動く。
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - guide-harmony
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guide-harmony-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows x64 (unsigned)
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set package label
+        shell: powershell
+        run: |
+          $short = "${{ github.sha }}".Substring(0, 7)
+          "OPENTUNE_BUILD_LABEL=guide-$short" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Download Windows dependencies
+        shell: powershell
+        run: scripts/github_actions/fetch-windows-deps.ps1
+
+      - name: Configure Visual Studio 2022
+        shell: powershell
+        run: |
+          cmake --preset windows-ara-vs2022
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build Release
+        shell: powershell
+        run: |
+          cmake --build --preset windows-ara-release --target OpenTune_VST3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build --preset windows-ara-release --target OpenTuneStandalone_Standalone
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package the portable build
+        id: package
+        shell: powershell
+        run: scripts/github_actions/package-windows-portable.ps1
+
+      - name: Upload the Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenTune-GuideHarmony-Windows-x64
+          path: dist/windows-stage/**
+          if-no-files-found: error

@@ -710,6 +710,15 @@ public:
         float vibratoDepthDefault,
         float vibratoRateDefault,
         juce::String undoDescription = "Edit note");
+    // [GuideHarmony] content の全ノートを targetFn(note, 現在MIDI) が返す MIDI に移動し、
+    // 補正カーブを焼き直して確定する（undo 付き）。nullopt のノートは変更しない。
+    bool retargetContentNotes(
+        ContentKey key,
+        const std::function<std::optional<float>(const Note& note, float currentMidi)>& targetFn,
+        float retuneSpeedDefault,
+        float vibratoDepthDefault,
+        float vibratoRateDefault,
+        juce::String undoDescription);
     struct SelectedNoteEqEditResult
     {
         SelectedNoteEqEditStatus status = SelectedNoteEqEditStatus::Failed;

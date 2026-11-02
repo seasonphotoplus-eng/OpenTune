@@ -40,6 +40,7 @@
 #include "Content/StandaloneClipContent.h"
 #include "Utils/KeyShortcutConfig.h"
 #include "Utils/PlacementActions.h"
+#include "Utils/GuideTrackAnalysis.h"
 #include <cmath>
 #include <atomic>
 #include <cstdlib>
@@ -576,6 +577,9 @@ OpenTuneAudioProcessorEditor::OpenTuneAudioProcessorEditor(OpenTuneAudioProcesso
     // Undo/Redo 菜单项实时反映撤销栈状态
     menuBar_.canUndoQuery = [this]() { return processorRef_.getUndoManager().canUndo(); };
     menuBar_.canRedoQuery = [this]() { return processorRef_.getUndoManager().canRedo(); };
+    // [GuideHarmony] お手本メニューの状態
+    menuBar_.hasGuideQuery = [this]() { return pianoRoll_.hasGuide(); };
+    menuBar_.guideVisibleQuery = [this]() { return pianoRoll_.isGuideVisible(); };
 
 #if JUCE_MAC
     // Populate the macOS system menu bar with File/Edit/View menus.
@@ -3881,5 +3885,150 @@ void OpenTuneAudioProcessorEditor::refreshAllUIFromProject()
     syncPianoRollFromPlacementSelection(activeTrack, placementIndex);
     arrangementView_.requestContentRedraw();
 }
+
+
+// ============================================================================
+// [GuideHarmony] お手本（MELO）読み込み・表示・スナップ、ハモリトラック作成
+// ============================================================================
+void OpenTuneAudioProcessorEditor::guideImportRequested()
+{
+    if (guideAnalysisInProgress_) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), LOC(kGuideAnalyzing));
+        return;
+    }
+
+    juce::Component::SafePointer<OpenTuneAudioProcessorEditor> safeThis(this);
+    PlatformFileDialogs::chooseFilesToOpen(
+        LOC(kGuideImport),
+        juce::File::getSpecialLocation(juce::File::userHomeDirectory),
+        getImportWildcardFilter(),
+        false,
+        true,
+        &contentRoot_,
+        [safeThis](const juce::Array<juce::File>& selectedFiles)
+    {
+        if (safeThis == nullptr || selectedFiles.isEmpty())
+            return;
+        const auto file = selectedFiles.getFirst();
+        safeThis->guideAnalysisInProgress_ = true;
+        safeThis->guideAudioLoader_.loadAudioFile(
+            file,
+            {},
+            [safeThis, fileName = file.getFileName()](AsyncAudioLoader::LoadResult result) mutable
+            {
+                if (safeThis == nullptr)
+                    return;
+                if (!result.success) {
+                    safeThis->guideAnalysisInProgress_ = false;
+                    ConfirmDialogContent::showMessage(&safeThis->contentRoot_, LOC(kGuideMenu),
+                                                      result.errorMessage);
+                    return;
+                }
+                auto buffer = std::make_shared<juce::AudioBuffer<float>>(std::move(result.audioBuffer));
+                const double sampleRate = result.sampleRate;
+                safeThis->launchBackgroundUiTask([safeThis, buffer, sampleRate, fileName]()
+                {
+                    std::vector<GuideNote> notes;
+                    std::string error;
+                    const bool ok = analyzeGuideTrack(*buffer, sampleRate, notes, error);
+                    juce::MessageManager::callAsync([safeThis, ok, notes = std::move(notes), error, fileName]() mutable
+                    {
+                        if (safeThis == nullptr)
+                            return;
+                        safeThis->guideAnalysisInProgress_ = false;
+                        if (!ok) {
+                            AppLogger::error("[Guide] analysis failed: " + juce::String(error));
+                            ConfirmDialogContent::showMessage(&safeThis->contentRoot_, LOC(kGuideMenu),
+                                                              LOC(kGuideFailed) + "\n" + juce::String(error));
+                            return;
+                        }
+                        AppLogger::log("[Guide] loaded " + fileName + " notes=" + juce::String(static_cast<int>(notes.size())));
+                        safeThis->pianoRoll_.setGuideNotes(std::move(notes));
+                        safeThis->pianoRoll_.setGuideVisible(true);
+                    });
+                });
+            });
+    });
+}
+
+void OpenTuneAudioProcessorEditor::guideClearRequested()
+{
+    pianoRoll_.setGuideNotes({});
+}
+
+void OpenTuneAudioProcessorEditor::guideVisibleToggled(bool shouldShow)
+{
+    pianoRoll_.setGuideVisible(shouldShow);
+}
+
+void OpenTuneAudioProcessorEditor::snapToGuideRequested()
+{
+    pianoRoll_.snapNotesToGuide();
+}
+
+void OpenTuneAudioProcessorEditor::harmonyRequested(int degreeSteps)
+{
+    if (externalEditActive_ || degreeSteps == 0)
+        return;
+    auto* arrangement = processorRef_.getStandaloneArrangement();
+    const ContentKey sourceKey = pianoRoll_.editedContentKey();
+    if (arrangement == nullptr || !sourceKey.isValid()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kHarmonyMenu), LOC(kHarmonyNoClip));
+        return;
+    }
+
+    // 編集中クリップのトラックと配置を探す
+    const int visibleCount = trackPanel_.getVisibleTrackCount();
+    int sourceTrack = -1;
+    StandaloneArrangement::Placement sourcePlacement;
+    for (int t = 0; t < visibleCount && sourceTrack < 0; ++t) {
+        const int n = arrangement->getNumPlacements(t);
+        for (int i = 0; i < n; ++i) {
+            StandaloneArrangement::Placement p;
+            if (arrangement->getPlacementByIndex(t, i, p) && p.contentKey == sourceKey) {
+                sourceTrack = t;
+                sourcePlacement = p;
+                break;
+            }
+        }
+    }
+    if (sourceTrack < 0 || visibleCount >= OpenTuneAudioProcessor::MAX_TRACKS) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kHarmonyMenu), LOC(kHarmonyNoClip));
+        return;
+    }
+
+    const auto snapshot = processorRef_.getContentSnapshot(sourceKey);
+    if (snapshot == nullptr || snapshot->notes.empty()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kHarmonyMenu), LOC(kHarmonyNoClip));
+        return;
+    }
+
+    const ContentKey harmonyKey = processorRef_.cloneContent(sourceKey, sourcePlacement.name + " Harmony");
+    if (!harmonyKey.isValid())
+        return;
+
+    const int targetSlot = visibleCount;
+    StandaloneArrangement::Placement dup = sourcePlacement;
+    dup.placementId = 0;
+    dup.contentKey = harmonyKey;
+    dup.name = sourcePlacement.name + " Harmony";
+    if (!arrangement->insertPlacement(targetSlot, 0, dup)) {
+        processorRef_.getStandaloneContentRepository()->retireClip(harmonyKey);
+        return;
+    }
+    arrangement->setTrackVolume(targetSlot, arrangement->getTrackVolume(sourceTrack));
+    arrangement->setTrackColour(targetSlot, arrangement->getTrackColour(sourceTrack));
+
+    trackPanel_.setVisibleTrackCount(visibleCount + 1);
+    arrangementView_.setVisibleTrackCount(visibleCount + 1);
+    trackPanel_.setTrackColour(targetSlot, arrangement->getTrackColour(sourceTrack));
+
+    // 複製したクリップのノートを曲のキーに沿って移動（ボコーダーで再合成される）
+    pianoRoll_.shiftContentNotesDiatonic(harmonyKey, degreeSteps);
+
+    arrangementView_.requestContentRedraw();
+    projectSession_.markDirty();
+}
+
 
 } // namespace OpenTune

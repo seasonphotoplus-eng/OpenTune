@@ -242,6 +242,12 @@ public:
     // 唯一派生路径：渲染高亮、参数操作、auto-tune 都从这里取范围。
     FrameSelection collectSelectedFrameRanges() const;
 
+    // [GuideHarmony] 选中音符（无选择时为全部音符）按 targetFn 返回的目标 MIDI 重定音高。
+    // targetFn 返回 nullopt 表示该音符不改。复用键盘上下移动的提交/撤销路径。
+    // 返回实际改动的音符数。
+    int retargetNotesPitch(const std::function<std::optional<float>(const Note& note, float currentMidi)>& targetFn,
+                           const juce::String& undoDescription);
+
 private:
     // === 各工具的 mouseDown/mouseDrag/mouseUp 分派 ===
     void handleSelectTool(const juce::MouseEvent& e);

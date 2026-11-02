@@ -2706,6 +2706,10 @@ void PianoRollComponent::drawContent(juce::Graphics& g, const ViewportState& vie
     for (const auto& item : renderCtx.contents)
         renderer_->drawUnvoicedFrameBands(g, renderCtx, item);
 
+    // [GuideHarmony] お手本ノート（灰色・ノートの背面）
+    if (guideVisible_ && !guideNotes_.empty())
+        drawGuideNotes(g, mapper, static_cast<float>(view.pixelsPerSemitone), ch);
+
     for (const auto& item : renderCtx.contents)
         renderer_->drawNotes(g, renderCtx, item);
 
@@ -5667,6 +5671,13 @@ bool PianoRollComponent::keyPressed(const juce::KeyPress& key) {
     if (handleViewportShortcut(key))
         return true;
 
+    // [GuideHarmony] Ctrl+Shift+G: お手本の音名に合わせる
+    if (hasGuide()
+        && key == juce::KeyPress('G', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier, 0)) {
+        snapNotesToGuide();
+        return true;
+    }
+
     const auto keyCode = key.getKeyCode();
     if (!key.getModifiers().isAnyModifierKeyDown()
         && (keyCode == juce::KeyPress::upKey || keyCode == juce::KeyPress::downKey
@@ -6239,5 +6250,134 @@ ViewMapper PianoRollComponent::makeViewMapperForView(const ViewportState& view) 
         maxMidi_
     };
 }
+
+
+// ============================================================================
+// [GuideHarmony] お手本（ガイド）表示とスナップ、ダイアトニック移動
+// ============================================================================
+void PianoRollComponent::setGuideNotes(std::vector<GuideNote> notes)
+{
+    guideNotes_ = std::move(notes);
+    std::sort(guideNotes_.begin(), guideNotes_.end(),
+              [](const GuideNote& a, const GuideNote& b) { return a.startSeconds < b.startSeconds; });
+    requestContentRedraw();
+}
+
+void PianoRollComponent::setGuideVisible(bool visible)
+{
+    if (guideVisible_ == visible)
+        return;
+    guideVisible_ = visible;
+    requestContentRedraw();
+}
+
+float PianoRollComponent::computeGuideOctaveShift() const
+{
+    // お手本（例: 1オクターブ上のMELO）を、編集中クリップの音域に重なるようにオクターブ単位で移動して表示する。
+    if (guideNotes_.empty() || cachedNotes_.empty())
+        return 0.0f;
+    std::vector<float> g, v;
+    g.reserve(guideNotes_.size());
+    for (const auto& n : guideNotes_)
+        g.push_back(n.midi);
+    for (const auto& n : cachedNotes_)
+        if (n.isVoiced && n.pitch > 0.0f)
+            v.push_back(PitchUtils::freqToMidi(n.pitch) + n.pitchOffset);
+    if (g.empty() || v.empty())
+        return 0.0f;
+    std::nth_element(g.begin(), g.begin() + static_cast<long>(g.size() / 2), g.end());
+    std::nth_element(v.begin(), v.begin() + static_cast<long>(v.size() / 2), v.end());
+    const float diff = v[v.size() / 2] - g[g.size() / 2];
+    return 12.0f * std::round(diff / 12.0f);
+}
+
+void PianoRollComponent::drawGuideNotes(juce::Graphics& g, const ViewMapper& mapper,
+                                        float pixelsPerSemitone, int height) const
+{
+    const float shift = computeGuideOctaveShift();
+    const auto fill = juce::Colour::fromRGBA(200, 200, 200, 70);
+    const auto edge = juce::Colour::fromRGBA(220, 220, 220, 150);
+    const auto clip = g.getClipBounds();
+    for (const auto& n : guideNotes_) {
+        const int x1 = mapper.timeToX(n.startSeconds);
+        const int x2 = mapper.timeToX(n.endSeconds);
+        if (x2 < clip.getX() || x1 > clip.getRight())
+            continue;
+        // ViewMapper のレーンは freqToMidi() - 0.5 基準（drawNotes と同じ式）
+        const float laneMidi = n.midi + shift - 0.5f;
+        const float y = mapper.midiToY(laneMidi) - pixelsPerSemitone * 0.5f;
+        if (y > static_cast<float>(height) || y + pixelsPerSemitone < 0.0f)
+            continue;
+        juce::Rectangle<float> r(static_cast<float>(x1), y,
+                                 static_cast<float>(std::max(2, x2 - x1)), pixelsPerSemitone);
+        g.setColour(fill);
+        g.fillRoundedRectangle(r, 2.0f);
+        g.setColour(edge);
+        g.drawRoundedRectangle(r.reduced(0.5f), 2.0f, 1.0f);
+    }
+}
+
+int PianoRollComponent::snapNotesToGuide()
+{
+    if (guideNotes_.empty() || toolHandler_ == nullptr)
+        return 0;
+
+    auto target = [this](const Note& note, float currentMidi) -> std::optional<float> {
+        const double t0 = sourceTimeToTimelineTime(note.startTime);
+        const double t1 = sourceTimeToTimelineTime(note.endTime);
+        const double len = t1 - t0;
+        if (len <= 0.0)
+            return std::nullopt;
+        // 重なりが最大のお手本ノートを探す
+        const GuideNote* best = nullptr;
+        double bestOverlap = 0.0;
+        for (const auto& gn : guideNotes_) {
+            if (gn.startSeconds >= t1)
+                break;
+            const double ov = std::min(t1, gn.endSeconds) - std::max(t0, gn.startSeconds);
+            if (ov > bestOverlap) {
+                bestOverlap = ov;
+                best = &gn;
+            }
+        }
+        if (best == nullptr || bestOverlap < 0.3 * len)
+            return std::nullopt;   // お手本が鳴っていない所（ハモリ・アドリブ等）は触らない
+        return snapMidiToGuidePitchClass(currentMidi, best->midi);   // 音名だけ合わせる
+    };
+    return toolHandler_->retargetNotesPitch(target, LOC_RAW("Snap to guide"));
+}
+
+int PianoRollComponent::shiftNotesDiatonic(int degreeSteps)
+{
+    if (toolHandler_ == nullptr || degreeSteps == 0)
+        return 0;
+    // スケール未設定（クロマチック）のときはメジャー扱い
+    const auto cfg = makeScaleSnapConfigFromUi(scaleRootNote_, scaleType_).value_or(
+        ScaleSnapConfig{ juce::jlimit(0, 11, scaleRootNote_), ScaleMode::Major });
+    const int root = static_cast<int>(cfg.root);
+    const ScaleMode mode = cfg.mode;
+    auto target = [root, mode, degreeSteps](const Note&, float currentMidi) -> std::optional<float> {
+        return diatonicShiftMidi(currentMidi, root, mode, degreeSteps);
+    };
+    return toolHandler_->retargetNotesPitch(target, LOC_RAW("Create harmony"));
+}
+
+bool PianoRollComponent::shiftContentNotesDiatonic(ContentKey key, int degreeSteps)
+{
+    if (processor_ == nullptr || degreeSteps == 0)
+        return false;
+    const auto cfg = makeScaleSnapConfigFromUi(scaleRootNote_, scaleType_).value_or(
+        ScaleSnapConfig{ juce::jlimit(0, 11, scaleRootNote_), ScaleMode::Major });
+    const int root = static_cast<int>(cfg.root);
+    const ScaleMode mode = cfg.mode;
+    return processor_->retargetContentNotes(
+        key,
+        [root, mode, degreeSteps](const Note&, float currentMidi) -> std::optional<float> {
+            return diatonicShiftMidi(currentMidi, root, mode, degreeSteps);
+        },
+        currentRetuneSpeed_, currentVibratoDepth_, currentVibratoRate_,
+        LOC_RAW("Create harmony"));
+}
+
 
 } // namespace OpenTune

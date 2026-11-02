@@ -177,6 +177,21 @@ constexpr const char* kEdit = "Edit";
 constexpr const char* kView = "View";
 
 constexpr const char* kImportAudio = "Import Audio...";
+// [GuideHarmony]
+constexpr const char* kGuideMenu = "Guide / Harmony";
+constexpr const char* kGuideImport = "Load Guide Track (MELO)...";
+constexpr const char* kGuideClear = "Clear Guide";
+constexpr const char* kGuideShow = "Show Guide";
+constexpr const char* kGuideSnap = "Snap Notes to Guide  (Ctrl+Shift+G)";
+constexpr const char* kGuideAnalyzing = "Analyzing guide track...";
+constexpr const char* kGuideFailed = "Could not analyze the guide track.";
+constexpr const char* kHarmonyMenu = "Create Harmony Track";
+constexpr const char* kHarmony3rdUp = "3rd above";
+constexpr const char* kHarmony3rdDown = "3rd below";
+constexpr const char* kHarmony4thDown = "4th below";
+constexpr const char* kHarmony5thUp = "5th above";
+constexpr const char* kHarmony6thDown = "6th below";
+constexpr const char* kHarmonyNoClip = "Select a clip in the piano roll first.";
 constexpr const char* kExportAudio = "Export Audio";
 constexpr const char* kExportSelectedClip = "Export Selected Clip";
 constexpr const char* kExportTrack = "Export Track";
@@ -526,6 +541,20 @@ inline juce::String get(Language lang, const char* key)
         { Keys::kView, "View", "视图", "表示", "Вид", "Ver" },
         
         { Keys::kImportAudio, "Import Audio...", "导入音频...", "オーディオをインポート...", "Импорт аудио...", "Importar audio..." },
+        { Keys::kGuideMenu, "Guide / Harmony", "参考/和声", "お手本・ハモリ", "Гид / гармония", "Guía / armonía" },
+        { Keys::kGuideImport, "Load Guide Track (MELO)...", "载入参考音轨...", "お手本(MELO)を読み込み...", "Загрузить гид...", "Cargar guía..." },
+        { Keys::kGuideClear, "Clear Guide", "清除参考", "お手本を消去", "Очистить гид", "Borrar guía" },
+        { Keys::kGuideShow, "Show Guide", "显示参考", "お手本を表示", "Показать гид", "Mostrar guía" },
+        { Keys::kGuideSnap, "Snap Notes to Guide  (Ctrl+Shift+G)", "吸附到参考  (Ctrl+Shift+G)", "お手本の音名に合わせる  (Ctrl+Shift+G)", "Привязать к гиду  (Ctrl+Shift+G)", "Ajustar a la guía  (Ctrl+Shift+G)" },
+        { Keys::kGuideAnalyzing, "Analyzing guide track...", "正在分析参考音轨...", "お手本を解析中...", "Анализ гида...", "Analizando guía..." },
+        { Keys::kGuideFailed, "Could not analyze the guide track.", "参考音轨分析失败。", "お手本の解析に失敗しました。", "Не удалось проанализировать гид.", "No se pudo analizar la guía." },
+        { Keys::kHarmonyMenu, "Create Harmony Track", "创建和声音轨", "ハモリトラックを作成", "Создать гармонию", "Crear armonía" },
+        { Keys::kHarmony3rdUp, "3rd above", "上三度", "3度上", "Терция вверх", "3ª arriba" },
+        { Keys::kHarmony3rdDown, "3rd below", "下三度", "3度下", "Терция вниз", "3ª abajo" },
+        { Keys::kHarmony4thDown, "4th below", "下四度", "4度下", "Кварта вниз", "4ª abajo" },
+        { Keys::kHarmony5thUp, "5th above", "上五度", "5度上", "Квинта вверх", "5ª arriba" },
+        { Keys::kHarmony6thDown, "6th below", "下六度", "6度下", "Секста вниз", "6ª abajo" },
+        { Keys::kHarmonyNoClip, "Select a clip in the piano roll first.", "请先在钢琴卷帘中选择片段。", "先にピアノロールでクリップを選んでください。", "Сначала выберите клип.", "Primero selecciona un clip." },
         { Keys::kExportAudio, "Export Audio", "导出音频", "オーディオをエクスポート", "Экспорт аудио", "Exportar audio" },
         { Keys::kExportSelectedClip, "Export Selected Clip", "导出选中的片段", "選択したクリップをエクスポート", "Экспорт клипа", "Exportar clip seleccionado" },
         { Keys::kExportTrack, "Export Track", "导出轨道", "トラックをエクスポート", "Экспорт дорожки", "Exportar pista" },

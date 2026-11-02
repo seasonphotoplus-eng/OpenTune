@@ -142,6 +142,27 @@ juce::PopupMenu MenuBarComponent::getMenuForIndex(int topLevelMenuIndex, const j
             const bool canRedo = canRedoQuery ? canRedoQuery() : true;
             menu.addItem(EditUndo, LOC(kUndo) + "  (Ctrl+Z)", canUndo);
             menu.addItem(EditRedo, LOC(kRedo) + "  (Ctrl+Shift+Z)", canRedo);
+
+            // [GuideHarmony] お手本・ハモリ（Standalone のみ）
+            if (profile_ == Profile::Standalone) {
+                const bool hasGuide = hasGuideQuery ? hasGuideQuery() : false;
+                const bool guideVisible = guideVisibleQuery ? guideVisibleQuery() : true;
+                menu.addSeparator();
+                juce::PopupMenu guideMenu;
+                guideMenu.addItem(GuideImport, LOC(kGuideImport));
+                guideMenu.addItem(GuideShow, LOC(kGuideShow), hasGuide, guideVisible);
+                guideMenu.addItem(GuideSnap, LOC(kGuideSnap), hasGuide);
+                guideMenu.addItem(GuideClear, LOC(kGuideClear), hasGuide);
+                guideMenu.addSeparator();
+                juce::PopupMenu harmonyMenu;
+                harmonyMenu.addItem(Harmony3rdUp, LOC(kHarmony3rdUp));
+                harmonyMenu.addItem(Harmony3rdDown, LOC(kHarmony3rdDown));
+                harmonyMenu.addItem(Harmony4thDown, LOC(kHarmony4thDown));
+                harmonyMenu.addItem(Harmony5thUp, LOC(kHarmony5thUp));
+                harmonyMenu.addItem(Harmony6thDown, LOC(kHarmony6thDown));
+                guideMenu.addSubMenu(LOC(kHarmonyMenu), harmonyMenu);
+                menu.addSubMenu(LOC(kGuideMenu), guideMenu);
+            }
             break;
         }
         case 2:  // View
@@ -262,6 +283,28 @@ void MenuBarComponent::menuItemSelected(int menuItemID, int topLevelMenuIndex)
         case OpenAbout:
             listeners_.call([](Listener& l) { l.aboutRequested(); });
             break;
+
+        // [GuideHarmony]
+        case GuideImport:
+            listeners_.call([](Listener& l) { l.guideImportRequested(); });
+            break;
+        case GuideClear:
+            listeners_.call([](Listener& l) { l.guideClearRequested(); });
+            break;
+        case GuideShow:
+        {
+            const bool next = !(guideVisibleQuery ? guideVisibleQuery() : true);
+            listeners_.call([next](Listener& l) { l.guideVisibleToggled(next); });
+            break;
+        }
+        case GuideSnap:
+            listeners_.call([](Listener& l) { l.snapToGuideRequested(); });
+            break;
+        case Harmony3rdUp:   listeners_.call([](Listener& l) { l.harmonyRequested(+2); }); break;
+        case Harmony3rdDown: listeners_.call([](Listener& l) { l.harmonyRequested(-2); }); break;
+        case Harmony4thDown: listeners_.call([](Listener& l) { l.harmonyRequested(-3); }); break;
+        case Harmony5thUp:   listeners_.call([](Listener& l) { l.harmonyRequested(+4); }); break;
+        case Harmony6thDown: listeners_.call([](Listener& l) { l.harmonyRequested(-5); }); break;
 
         case ShowWaveform:
         {

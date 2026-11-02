@@ -16,6 +16,7 @@
  * - overlay_        ：播放头、选中高亮、框选、绘制预览、TimeGrid 把手
  */
 
+#include "../../Utils/GuideHarmony.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "ViewMapper.h"
@@ -217,6 +218,20 @@ public:
         overlay_->repaint();
     }
     void setScale(int rootNote, int scaleType);
+
+    // ===== [GuideHarmony] お手本（ガイド）表示 / ハモリ =====
+    using GuideNote = OpenTune::GuideNote;   // Utils/GuideHarmony.h
+    void setGuideNotes(std::vector<GuideNote> notes);
+    const std::vector<GuideNote>& getGuideNotes() const noexcept { return guideNotes_; }
+    void setGuideVisible(bool visible);
+    bool isGuideVisible() const noexcept { return guideVisible_; }
+    bool hasGuide() const noexcept { return !guideNotes_.empty(); }
+    /** 選択ノート（無選択なら全ノート）をお手本の音名に合わせる（オクターブは現在位置に最も近いもの）。戻り値=変更数 */
+    int snapNotesToGuide();
+    /** 選択ノート（無選択なら全ノート）を現在のキー/スケールに沿って degreeSteps 度ぶん移動（+2=3度上, -2=3度下, -5=6度下, +4=5度上）。 */
+    int shiftNotesDiatonic(int degreeSteps);
+    /** 指定コンテンツ（例: 複製したハモリ用クリップ）の全ノートをダイアトニックに移動して確定する。 */
+    bool shiftContentNotesDiatonic(ContentKey key, int degreeSteps);
     void setAudioEditingScheme(AudioEditingScheme::Scheme scheme) { applyAudioEditingScheme(scheme); }
     bool isOpenDyne() const noexcept { return AudioEditingScheme::usesNotesPrimaryScheme(audioEditingScheme_); }
 
@@ -565,6 +580,12 @@ private:
     KeyShortcutConfig::KeyShortcutSettings shortcutSettings_ = KeyShortcutConfig::KeyShortcutSettings::getDefault();
     const KeyShortcutConfig::KeyBinding* pointerShortcutBinding_ = nullptr;
     juce::Colour trackDisplayColour_{0xFF4A90D9};
+
+    // [GuideHarmony]
+    std::vector<GuideNote> guideNotes_;
+    bool guideVisible_ = true;
+    float computeGuideOctaveShift() const;
+    void drawGuideNotes(juce::Graphics& g, const ViewMapper& mapper, float pixelsPerSemitone, int height) const;
 
     int scaleRootNote_ = 0;
     int scaleType_ = 1;

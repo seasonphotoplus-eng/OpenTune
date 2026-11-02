@@ -34,6 +34,7 @@
 #include "Utils/PitchControlConfig.h"
 #include "Utils/ScaleUiMapping.h"
 #include "Utils/PianoRollEditAction.h"
+#include "Utils/PitchUtils.h"
 #include "Utils/VolumeEnvelopeEditAction.h"
 #include "Utils/PianoRollNotePatchAction.h"
 #include "Utils/ScissorsUndoAction.h"
@@ -4633,6 +4634,100 @@ SelectedNoteParameterEditResult OpenTuneAudioProcessor::editSelectedNoteParamete
         patch->afterSegments,
         affectedRange));
     return result;
+}
+
+bool OpenTuneAudioProcessor::retargetContentNotes(
+    ContentKey key,
+    const std::function<std::optional<float>(const Note& note, float currentMidi)>& targetFn,
+    float retuneSpeedDefault,
+    float vibratoDepthDefault,
+    float vibratoRateDefault,
+    juce::String undoDescription)
+{
+    auto* messageManager = juce::MessageManager::getInstanceWithoutCreating();
+    if (messageManager == nullptr || !messageManager->isThisTheMessageThread() || !targetFn)
+        return false;
+
+    const auto snapshot = getContentSnapshot(key);
+    if (snapshot == nullptr || snapshot->pitchCurve == nullptr || contentCommands_ == nullptr
+        || snapshot->notes.empty())
+        return false;
+
+    const auto curveSnapshot = snapshot->pitchCurve;
+    const F0Timeline timeline(curveSnapshot->getHopSize(), curveSnapshot->getSampleRate(),
+                              static_cast<int>(curveSnapshot->size()));
+    if (timeline.isEmpty())
+        return false;
+
+    auto afterNotes = snapshot->notes;
+    double dirtyStart = 1e30;
+    double dirtyEnd = -1e30;
+    bool changed = false;
+    for (auto& note : afterNotes) {
+        if (!note.isVoiced || note.pitch <= 0.0f)
+            continue;
+        const float baseMidi = PitchUtils::freqToMidi(note.pitch);
+        const auto target = targetFn(note, baseMidi + note.pitchOffset);
+        if (!target.has_value())
+            continue;
+        const float newOffset = *target - baseMidi;
+        if (std::abs(newOffset - note.pitchOffset) <= 0.001f)
+            continue;
+        note.pitchOffset = newOffset;
+        note.dirty = true;
+        changed = true;
+        dirtyStart = std::min(dirtyStart, note.startTime);
+        dirtyEnd = std::max(dirtyEnd, note.endTime);
+    }
+    if (!changed)
+        return false;
+
+    const auto editRange = timeline.rangeForTimes(dirtyStart, dirtyEnd);
+    if (editRange.isEmpty())
+        return false;
+
+    auto derivedCurve = PitchCurve::fromSnapshot(curveSnapshot);
+    const auto derivedSnapshot = derivedCurve->applyCorrectionToRange(
+        afterNotes, editRange.startFrame, editRange.endFrameExclusive,
+        static_cast<float>(snapshot->pitchShiftSettings.getPitchRatio()),
+        retuneSpeedDefault, vibratoDepthDefault, vibratoRateDefault);
+    if (derivedSnapshot == nullptr)
+        return false;
+
+    const auto affected = PitchCurve::expandNoteBasedCorrectionRange(
+        editRange.startFrame, editRange.endFrameExclusive, timeline.endFrameExclusive());
+    const double t0 = timeline.timeAtFrame(affected.startFrame);
+    const double t1 = timeline.timeAtFrame(affected.endFrameExclusive);
+
+    auto notesIn = [t0, t1](const std::vector<Note>& notes) {
+        std::vector<Note> out;
+        for (const auto& n : notes)
+            if (n.endTime > t0 && n.startTime < t1)
+                out.push_back(n);
+        return out;
+    };
+    auto segsIn = [&affected](const std::vector<PitchCorrectionSegment>& segs) {
+        std::vector<PitchCorrectionSegment> out;
+        for (const auto& seg : segs)
+            if (seg.startFrame < affected.endFrameExclusive && seg.endFrame > affected.startFrame)
+                out.push_back(seg);
+        return out;
+    };
+
+    auto beforeNotes = notesIn(snapshot->notes);
+    auto afterInRange = notesIn(afterNotes);
+    auto beforeSegs = segsIn(curveSnapshot->getCorrectionSegments());
+    auto afterSegs = segsIn(derivedSnapshot->getCorrectionSegments());
+    const ContentEditRangeFrames range{ affected.startFrame, affected.endFrameExclusive };
+
+    if (contentCommands_->commitNotesAndSegments(key, afterInRange, afterSegs, range) == nullptr)
+        return false;
+
+    undoManager_.addAction(std::make_unique<PianoRollEditAction>(
+        contentCommands_, key, std::move(undoDescription),
+        std::move(beforeNotes), std::move(afterInRange),
+        std::move(beforeSegs), std::move(afterSegs), range));
+    return true;
 }
 
 OpenTuneAudioProcessor::SelectedNoteEqEditResult OpenTuneAudioProcessor::editSelectedNoteEq(

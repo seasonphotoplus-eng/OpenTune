@@ -119,6 +119,12 @@ public:
     void mouseTrailThemeChanged(MouseTrailConfig::TrailTheme theme) override;
     void cursorStyleChanged(CursorStyleId style) override;
     void trackColorModeChanged(TrackColorMode mode) override;
+    // [GuideHarmony]
+    void guideImportRequested() override;
+    void guideClearRequested() override;
+    void guideVisibleToggled(bool shouldShow) override;
+    void snapToGuideRequested() override;
+    void harmonyRequested(int degreeSteps) override;
     void onboardingRequested() override;
 
     // TransportBarComponent::Listener
@@ -267,6 +273,8 @@ private:
 
     // Async loaders
     AsyncAudioLoader asyncAudioLoader_;
+    AsyncAudioLoader guideAudioLoader_;   // [GuideHarmony] お手本読み込み専用
+    bool guideAnalysisInProgress_ = false;
     bool isImportInProgress_ = false;
     
     // 多文件导入队列（解决并发导入问题）

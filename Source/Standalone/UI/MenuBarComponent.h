@@ -67,6 +67,12 @@ public:
         virtual void mouseTrailThemeChanged(MouseTrailConfig::TrailTheme theme) = 0;
         virtual void cursorStyleChanged(CursorStyleId style) = 0;
         virtual void trackColorModeChanged(TrackColorMode mode) { juce::ignoreUnused(mode); }
+        // [GuideHarmony] Standalone のみ。既定は何もしない。
+        virtual void guideImportRequested() {}
+        virtual void guideClearRequested() {}
+        virtual void guideVisibleToggled(bool shouldShow) { juce::ignoreUnused(shouldShow); }
+        virtual void snapToGuideRequested() {}
+        virtual void harmonyRequested(int degreeSteps) { juce::ignoreUnused(degreeSteps); }
     };
 
     explicit MenuBarComponent(OpenTuneAudioProcessor& processor, Profile profile = Profile::Standalone);
@@ -81,6 +87,9 @@ public:
     // 撤销/重做可用性查询回调（每次菜单弹出时实时求值；未注入时视为恒可用）
     std::function<bool()> canUndoQuery;
     std::function<bool()> canRedoQuery;
+    // [GuideHarmony] お手本の有無・表示状態（未注入時は false/true）
+    std::function<bool()> hasGuideQuery;
+    std::function<bool()> guideVisibleQuery;
 
     void refreshLocalizedText();  // 刷新本地化文本
     void setMouseTrailTheme(MouseTrailConfig::TrailTheme theme) { mouseTrailTheme_ = theme; }
@@ -166,7 +175,18 @@ private:
         OpenPreferences = 200,
         OpenHelp = 201,
         OpenOnboarding = 202,
-        OpenAbout = 203
+        OpenAbout = 203,
+
+        // [GuideHarmony]
+        GuideImport = 300,
+        GuideClear,
+        GuideShow,
+        GuideSnap,
+        Harmony3rdUp = 310,
+        Harmony3rdDown,
+        Harmony4thDown,
+        Harmony5thUp,
+        Harmony6thDown
     };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MenuBarComponent)
