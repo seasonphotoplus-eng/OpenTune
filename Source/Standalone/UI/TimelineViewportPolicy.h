@@ -49,7 +49,7 @@ struct TimelineViewportRequest
 class TimelineViewportPolicy
 {
 public:
-    static constexpr double kMinPixelsPerSecond = 10.0;
+    static constexpr double kMinPixelsPerSecond = 2.0;
     static constexpr double kMaxPixelsPerSecond = 1000.0;
 
     static double normalisePixelsPerSecond(double pps, TimelineViewportRequest::ViewKind viewKind) noexcept;

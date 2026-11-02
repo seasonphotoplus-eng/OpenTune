@@ -4049,6 +4049,118 @@ void OpenTuneAudioProcessorEditor::guideBatchSnapRequested()
     ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), msg);
 }
 
+void OpenTuneAudioProcessorEditor::exportAllTracksRequested()
+{
+    if (exportInProgress_.load()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kExportAudio), LOC(kExportInProgress));
+        return;
+    }
+
+    // トラックごとに「元のファイル名_ピッチ修正後.wav」を決める
+    struct TrackJob { int trackId; juce::String baseName; };
+    std::vector<TrackJob> jobs;
+    juce::File initialDir;
+    auto* arrangement = processorRef_.getStandaloneArrangement();
+    auto* sourceStore = processorRef_.getSourceStore();
+    const int visibleCount = trackPanel_.getVisibleTrackCount();
+    for (int t = 0; arrangement != nullptr && t < visibleCount; ++t) {
+        const int n = arrangement->getNumPlacements(t);
+        StandaloneArrangement::Placement first;
+        bool found = false;
+        for (int i = 0; i < n; ++i) {
+            StandaloneArrangement::Placement p;
+            if (!arrangement->getPlacementByIndex(t, i, p) || p.isRetired || !p.isValid())
+                continue;
+            if (!found || p.timelineStartSeconds < first.timelineStartSeconds) {
+                first = p;
+                found = true;
+            }
+        }
+        if (!found)
+            continue;
+
+        juce::String base;
+        if (const auto snap = processorRef_.getContentSnapshot(first.contentKey); snap != nullptr && sourceStore != nullptr) {
+            SourceStore::SourceSnapshot src;
+            if (sourceStore->getSnapshot(snap->sourceWindow.sourceId, src)) {
+                if (src.sourceFilePath.isNotEmpty()) {
+                    const juce::File f(src.sourceFilePath);
+                    base = f.getFileNameWithoutExtension();
+                    if (initialDir == juce::File{})
+                        initialDir = f.getParentDirectory();
+                } else if (src.displayName.isNotEmpty()) {
+                    base = juce::File::createFileWithoutCheckingPath(src.displayName).getFileNameWithoutExtension();
+                }
+            }
+        }
+        if (base.isEmpty())
+            base = first.name.isNotEmpty() ? first.name : ("Track" + juce::String(t + 1));
+        if (isHarmonyPlacementName(first.name))
+            base += juce::String::fromUTF8("_ハモリ");
+        jobs.push_back({ t, juce::File::createLegalFileName(base) });
+    }
+
+    if (jobs.empty()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kExportAudio), LOC(kExportAllNothing));
+        return;
+    }
+    if (initialDir == juce::File{})
+        initialDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
+
+    auto chooser = std::make_shared<juce::FileChooser>(LOC(kExportAllChooseFolder), initialDir);
+    juce::Component::SafePointer<OpenTuneAudioProcessorEditor> safeThis(this);
+    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                         [chooser, safeThis, jobs](const juce::FileChooser& fc)
+    {
+        if (safeThis == nullptr)
+            return;
+        const auto dir = fc.getResult();
+        if (dir == juce::File{} || !dir.isDirectory())
+            return;
+
+        // ファイル名の重複を避ける
+        std::vector<std::pair<int, juce::File>> targets;
+        juce::StringArray used;
+        const auto suffix = juce::String::fromUTF8("_ピッチ修正後");
+        for (const auto& job : jobs) {
+            juce::String name = job.baseName + suffix;
+            for (int k = 2; used.contains(name, true); ++k)
+                name = job.baseName + "_" + juce::String(k) + suffix;
+            used.add(name);
+            targets.emplace_back(job.trackId, dir.getChildFile(name + ".wav"));
+        }
+
+        auto* processor = &safeThis->processorRef_;
+        const auto exportLanguage = LocalizationManager::getInstance().resolveLanguage();
+        if (safeThis->exportWorker_.joinable())
+            safeThis->exportWorker_.join();
+        safeThis->exportInProgress_.store(true);
+
+        safeThis->exportWorker_ = std::thread([processor, targets, safeThis, exportLanguage]()
+        {
+            juce::StringArray okNames, failLines;
+            for (const auto& [trackId, file] : targets) {
+                if (processor->exportTrackAudio(trackId, file, exportLanguage))
+                    okNames.add(file.getFileName());
+                else
+                    failLines.add(file.getFileName() + " : " + processor->getLastExportError());
+            }
+            juce::MessageManager::callAsync([safeThis, okNames, failLines, dirPath = targets.front().second.getParentDirectory().getFullPathName()]()
+            {
+                if (safeThis == nullptr)
+                    return;
+                safeThis->exportInProgress_.store(false);
+                juce::String msg;
+                msg << LOC(kExportAllDone) << " " << okNames.size() << "\n" << dirPath << "\n\n"
+                    << okNames.joinIntoString("\n");
+                if (!failLines.isEmpty())
+                    msg << "\n\n" << LOC(kExportAllFailed) << "\n" << failLines.joinIntoString("\n");
+                ConfirmDialogContent::showMessage(&safeThis->contentRoot_, LOC(kExportAudio), msg);
+            });
+        });
+    });
+}
+
 void OpenTuneAudioProcessorEditor::guideShowKeysRequested()
 {
     if (!pianoRoll_.hasGuide()) {

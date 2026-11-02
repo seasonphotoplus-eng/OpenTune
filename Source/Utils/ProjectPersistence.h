@@ -26,7 +26,7 @@ namespace OpenTune {
 
 class ProjectPersistence {
 public:
-    explicit ProjectPersistence(Language language = Language::Chinese) : language_(language) {}
+    explicit ProjectPersistence(Language language = Language::Japanese) : language_(language) {}
 
     // ============================================================================
     // ValueTree 转换
@@ -98,7 +98,7 @@ private:
     static void setColourProperty(juce::ValueTree& tree, const juce::Identifier& name, const juce::Colour& colour);
     static juce::Colour getColourProperty(const juce::ValueTree& tree, const juce::Identifier& name, const juce::Colour& defaultColour);
 
-    Language language_ = Language::Chinese;
+    Language language_ = Language::Japanese;
 };
 
 } // namespace OpenTune

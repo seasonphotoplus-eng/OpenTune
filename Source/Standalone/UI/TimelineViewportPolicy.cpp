@@ -10,11 +10,11 @@ static double ppsMinFor(TimelineViewportRequest::ViewKind viewKind) noexcept
     switch (viewKind)
     {
     case TimelineViewportRequest::ViewKind::PianoRoll:
-        return 10.0;
+        return 2.0;   // [GuideHarmony] 曲全体（約10分）を1画面に収められるように
     case TimelineViewportRequest::ViewKind::Arrangement:
-        return 10.0;
+        return 2.0;   // [GuideHarmony] 曲全体（約10分）を1画面に収められるように
     }
-    return 10.0;
+    return 2.0;   // [GuideHarmony] 曲全体（約10分）を1画面に収められるように
 }
 
 static double ppsMaxFor(TimelineViewportRequest::ViewKind viewKind) noexcept

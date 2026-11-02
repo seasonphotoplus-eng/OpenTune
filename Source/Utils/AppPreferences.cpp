@@ -111,7 +111,7 @@ Language languageFromToken(const juce::String& token)
     if (token == "japanese") return Language::Japanese;
     if (token == "russian") return Language::Russian;
     if (token == "spanish") return Language::Spanish;
-    return Language::Chinese;
+    return Language::Japanese;
 }
 
 const char* toThemeToken(ThemeId theme)

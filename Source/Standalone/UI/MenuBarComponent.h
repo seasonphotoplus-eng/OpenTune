@@ -73,6 +73,7 @@ public:
         virtual void guideVisibleToggled(bool shouldShow) { juce::ignoreUnused(shouldShow); }
         virtual void snapToGuideRequested() {}
         virtual void harmonyRequested(int degreeSteps) { juce::ignoreUnused(degreeSteps); }
+        virtual void exportAllTracksRequested() {}
         virtual void guideBatchNotesRequested() {}
         virtual void guideBatchSnapRequested() {}
         virtual void guideShowKeysRequested() {}
@@ -181,6 +182,7 @@ private:
         OpenAbout = 203,
 
         // [GuideHarmony]
+        ExportAllTracks = 290,
         GuideImport = 300,
         GuideClear,
         GuideShow,

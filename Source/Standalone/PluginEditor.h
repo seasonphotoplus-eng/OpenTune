@@ -125,6 +125,7 @@ public:
     void guideVisibleToggled(bool shouldShow) override;
     void snapToGuideRequested() override;
     void harmonyRequested(int degreeSteps) override;
+    void exportAllTracksRequested() override;
     void guideBatchNotesRequested() override;
     void guideBatchSnapRequested() override;
     void guideShowKeysRequested() override;

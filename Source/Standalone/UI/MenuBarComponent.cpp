@@ -105,6 +105,7 @@ juce::PopupMenu MenuBarComponent::getMenuForIndex(int topLevelMenuIndex, const j
                 juce::PopupMenu exportMenu;
                 exportMenu.addItem(ExportSelectedClip, LOC(kExportSelectedClip));
                 exportMenu.addItem(ExportTrack, LOC(kExportTrack));
+                exportMenu.addItem(ExportAllTracks, LOC(kExportAllTracks));
                 exportMenu.addItem(ExportBus, LOC(kExportBus));
                 menu.addSubMenu(LOC(kExportAudio), exportMenu);
 
@@ -303,6 +304,9 @@ void MenuBarComponent::menuItemSelected(int menuItemID, int topLevelMenuIndex)
         }
         case GuideSnap:
             listeners_.call([](Listener& l) { l.snapToGuideRequested(); });
+            break;
+        case ExportAllTracks:
+            listeners_.call([](Listener& l) { l.exportAllTracksRequested(); });
             break;
         case GuideBatchNotes:
             listeners_.call([](Listener& l) { l.guideBatchNotesRequested(); });

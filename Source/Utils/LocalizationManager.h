@@ -59,7 +59,7 @@ class LocalizationManager
 {
 public:
     struct LanguageState {
-        Language language = Language::Chinese;
+        Language language = Language::Japanese;
     };
 
     class ScopedLanguageBinding
@@ -134,7 +134,7 @@ public:
         }
 
         jassertfalse;
-        return Language::Chinese;
+        return Language::Japanese;
     }
 
     void notifyLanguageChanged(Language lang)
@@ -192,6 +192,11 @@ constexpr const char* kHarmony4thDown = "4th below";
 constexpr const char* kHarmony5thUp = "5th above";
 constexpr const char* kHarmony6thDown = "6th below";
 constexpr const char* kHarmonyNoClip = "Select a clip in the piano roll first.";
+constexpr const char* kExportAllTracks = "Export All Tracks Separately (48kHz/24bit)...";
+constexpr const char* kExportAllChooseFolder = "Choose a folder for the exported tracks";
+constexpr const char* kExportAllDone = "Exported tracks:";
+constexpr const char* kExportAllFailed = "Failed:";
+constexpr const char* kExportAllNothing = "There are no tracks with audio to export.";
 constexpr const char* kGuideBatchSnap = "Snap ALL Clips to Guide (auto-create notes)";
 constexpr const char* kGuideBatchNotes = "Create Notes for All Clips";
 constexpr const char* kGuideBatchNotesDone = "Clips with new notes:";
@@ -564,6 +569,11 @@ inline juce::String get(Language lang, const char* key)
         { Keys::kHarmony4thDown, "4th below", "下四度", "4度下", "Кварта вниз", "4ª abajo" },
         { Keys::kHarmony5thUp, "5th above", "上五度", "5度上", "Квинта вверх", "5ª arriba" },
         { Keys::kHarmony6thDown, "6th below", "下六度", "6度下", "Секста вниз", "6ª abajo" },
+        { Keys::kExportAllTracks, "Export All Tracks Separately (48kHz/24bit)...", "分别导出全部音轨 (48kHz/24bit)...", "全トラックを個別に書き出し (48kHz/24bit)...", "Экспорт всех дорожек по отдельности...", "Exportar todas las pistas por separado..." },
+        { Keys::kExportAllChooseFolder, "Choose a folder for the exported tracks", "选择导出文件夹", "書き出し先のフォルダを選んでください", "Выберите папку для экспорта", "Elige una carpeta para exportar" },
+        { Keys::kExportAllDone, "Exported tracks:", "已导出音轨：", "書き出したトラック:", "Экспортировано:", "Pistas exportadas:" },
+        { Keys::kExportAllFailed, "Failed:", "失败：", "失敗:", "Ошибка:", "Fallos:" },
+        { Keys::kExportAllNothing, "There are no tracks with audio to export.", "没有可导出的音轨。", "書き出せるトラックがありません。", "Нет дорожек для экспорта.", "No hay pistas para exportar." },
         { Keys::kGuideBatchSnap, "Snap ALL Clips to Guide (auto-create notes)", "全部片段吸附到参考（自动生成音符）", "全クリップをお手本に合わせる（ノートも自動作成）", "Привязать все клипы к гиду", "Ajustar todos los clips a la guía" },
         { Keys::kGuideBatchNotes, "Create Notes for All Clips", "为全部片段生成音符", "全クリップのノートを作成", "Создать ноты для всех клипов", "Crear notas en todos los clips" },
         { Keys::kGuideBatchNotesDone, "Clips with new notes:", "已生成音符的片段：", "ノートを作成したクリップ:", "Клипы с новыми нотами:", "Clips con notas nuevas:" },

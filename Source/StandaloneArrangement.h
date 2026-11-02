@@ -189,7 +189,7 @@ private:
 
     mutable juce::ReadWriteLock stateLock_;
     std::array<Track, kTrackCount> tracks_;
-    Language language_ = Language::Chinese;
+    Language language_ = Language::Japanese;
     int activeTrackId_{0};
     int visibleTrackCount_{kDefaultVisibleTracks};
     uint64_t nextPlaybackEpoch_{1};

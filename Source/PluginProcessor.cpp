@@ -64,10 +64,11 @@ namespace OpenTune {
 // ============================================================================
 namespace {
 
-constexpr double kExportSampleRateHz = TimeCoordinate::kRenderSampleRate;
+constexpr double kExportSampleRateHz = TimeCoordinate::kRenderSampleRate;   // 内部レンダリング（バッファ）のレート
+constexpr double kExportFileSampleRateHz = 48000.0;   // [GuideHarmony] 書き出しファイルは 48kHz / 24bit を標準にする
+constexpr int kExportFileBitsPerSample = 24;
 constexpr int kExportNumChannels = 1;
 constexpr int kExportMasterNumChannels = 2;
-constexpr int kExportBitsPerSample = static_cast<int>(sizeof(float) * 8);
 
 ReferenceFeatureSet makeReferenceFeatureSetFromNotes(
     ReferenceFeatureProducer producer,
@@ -3293,10 +3294,29 @@ static bool writeAudioBufferToWavFile(const juce::AudioBuffer<float>& buffer,
 
     std::unique_ptr<juce::OutputStream> outStream(stream.release());
 
+    // 内部 44.1kHz → 48kHz に高品質リサンプル（r8brain）してから 24bit で書く
+    const int inRate = static_cast<int>(kExportSampleRateHz);
+    const int outRate = static_cast<int>(kExportFileSampleRateHz);
+    const juce::AudioBuffer<float>* toWrite = &buffer;
+    juce::AudioBuffer<float> resampled;
+    if (inRate != outRate && buffer.getNumSamples() > 0) {
+        ResamplingManager resampler;
+        const int outLen = static_cast<int>(std::llround(
+            static_cast<double>(buffer.getNumSamples()) * outRate / inRate));
+        resampled.setSize(buffer.getNumChannels(), std::max(1, outLen));
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch) {
+            const auto out = resampler.resampleExactLength(buffer.getReadPointer(ch),
+                                                           static_cast<size_t>(buffer.getNumSamples()),
+                                                           inRate, outRate, resampled.getNumSamples());
+            resampled.copyFrom(ch, 0, out.data(), std::min(static_cast<int>(out.size()), resampled.getNumSamples()));
+        }
+        toWrite = &resampled;
+    }
+
     auto options = juce::AudioFormatWriterOptions{}
-        .withSampleRate(kExportSampleRateHz)
-        .withNumChannels(buffer.getNumChannels())
-        .withBitsPerSample(kExportBitsPerSample);
+        .withSampleRate(kExportFileSampleRateHz)
+        .withNumChannels(toWrite->getNumChannels())
+        .withBitsPerSample(kExportFileBitsPerSample);
 
     auto writer = wav.createWriterFor(outStream, options);
     if (!writer) {
@@ -3304,7 +3324,7 @@ static bool writeAudioBufferToWavFile(const juce::AudioBuffer<float>& buffer,
         return false;
     }
 
-    return writer->writeFromAudioSampleBuffer(buffer, 0, buffer.getNumSamples());
+    return writer->writeFromAudioSampleBuffer(*toWrite, 0, toWrite->getNumSamples());
 }
 
 // 导出单个 placement 的音频

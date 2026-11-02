@@ -204,7 +204,7 @@ private:
     ProgressCallback progressCallback_;                 // 进度回调
     CompletionCallback completionCallback_;             // 完成回调
     std::shared_ptr<std::atomic<bool>> validityToken_;  // 有效性令牌（用于安全取消）
-    Language language_ = Language::Chinese;
+    Language language_ = Language::Japanese;
 };
 
 } // namespace OpenTune

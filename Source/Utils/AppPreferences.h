@@ -54,7 +54,7 @@ struct PluginEditorSize {
 };
 
 struct SharedPreferencesState {
-    Language language = Language::Chinese;
+    Language language = Language::Japanese;
     ThemeId theme = ThemeId::Aurora;
     AudioEditingScheme::Scheme audioEditingScheme = AudioEditingScheme::Scheme::CorrectedF0Primary;
     PianoRollVisualPreferences pianoRollVisualPreferences;
