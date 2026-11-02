@@ -1,12 +1,13 @@
 name: GuideHarmony Windows build
 
 # お手本(MELO)表示・ハモリ作成を追加した版の Windows ビルド（署名なし・ポータブル zip）。
-# guide-harmony ブランチへの push、または手動実行で動く。
+# guide-harmony（および作業ブランチ）への push、または手動実行で動く。
 on:
   workflow_dispatch:
   push:
     branches:
       - guide-harmony
+      - claude/new-session-gn41vy
 
 permissions:
   contents: read
