@@ -3890,6 +3890,174 @@ void OpenTuneAudioProcessorEditor::refreshAllUIFromProject()
 // ============================================================================
 // [GuideHarmony] お手本（MELO）読み込み・表示・スナップ、ハモリトラック作成
 // ============================================================================
+namespace {
+/** 複数クリップの編集を Ctrl+Z 1 回で戻せるようにまとめる。 */
+class GuideGroupedUndoAction : public UndoAction {
+public:
+    GuideGroupedUndoAction(juce::String description, std::vector<std::unique_ptr<UndoAction>> actions)
+        : description_(std::move(description)), actions_(std::move(actions)) {}
+    void undo() override
+    {
+        for (auto it = actions_.rbegin(); it != actions_.rend(); ++it)
+            (*it)->undo();
+    }
+    void redo() override
+    {
+        for (auto& a : actions_)
+            a->redo();
+    }
+    juce::String getDescription() const override { return description_; }
+
+private:
+    juce::String description_;
+    std::vector<std::unique_ptr<UndoAction>> actions_;
+};
+
+bool isHarmonyPlacementName(const juce::String& name)
+{
+    return name.endsWith("Harmony") || name.contains(juce::String::fromUTF8("ハモ"));
+}
+} // namespace
+
+std::vector<OpenTuneAudioProcessorEditor::GuidePlacementRef>
+OpenTuneAudioProcessorEditor::collectGuideTargetPlacements(bool includeHarmony) const
+{
+    std::vector<GuidePlacementRef> out;
+    auto* arrangement = processorRef_.getStandaloneArrangement();
+    if (arrangement == nullptr)
+        return out;
+    const int visibleCount = trackPanel_.getVisibleTrackCount();
+    for (int t = 0; t < visibleCount; ++t) {
+        const int n = arrangement->getNumPlacements(t);
+        for (int i = 0; i < n; ++i) {
+            StandaloneArrangement::Placement p;
+            if (!arrangement->getPlacementByIndex(t, i, p) || p.isRetired || !p.isValid())
+                continue;
+            if (!includeHarmony && isHarmonyPlacementName(p.name))
+                continue;
+            out.push_back({ t, p });
+        }
+    }
+    return out;
+}
+
+juce::String OpenTuneAudioProcessorEditor::describeGuideKeys() const
+{
+    juce::String text;
+    for (const auto& seg : pianoRoll_.getGuideKeySegments()) {
+        text << juce::String::fromUTF8(formatSecondsMMSS(seg.startSeconds).c_str()) << " -  "
+             << juce::String::fromUTF8(guideKeyName(seg.root).c_str()) << "\n";
+    }
+    return text;
+}
+
+void OpenTuneAudioProcessorEditor::guideBatchNotesRequested()
+{
+    if (externalEditActive_)
+        return;
+    int created = 0, skippedHasNotes = 0, notReady = 0;
+    for (const auto& ref : collectGuideTargetPlacements(true)) {
+        const auto snap = processorRef_.getContentSnapshot(ref.placement.contentKey);
+        if (snap == nullptr || snap->originalF0State != OriginalF0State::Ready || !snap->hasUsableOriginalF0()) {
+            ++notReady;
+            continue;
+        }
+        if (!snap->notes.empty()) {
+            ++skippedHasNotes;
+            continue;
+        }
+        if (processorRef_.generateNotesOnlyByContentKey(ref.placement.contentKey, pianoRoll_.getCurrentAutoTuneParams()))
+            ++created;
+    }
+    arrangementView_.requestContentRedraw();
+    if (created > 0)
+        projectSession_.markDirty();
+
+    juce::String msg;
+    msg << LOC(kGuideBatchNotesDone) << " " << created << "\n";
+    if (skippedHasNotes > 0)
+        msg << LOC(kGuideBatchHadNotes) << " " << skippedHasNotes << "\n";
+    if (notReady > 0)
+        msg << LOC(kGuideBatchNotReady) << " " << notReady << "\n";
+    ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), msg);
+}
+
+void OpenTuneAudioProcessorEditor::guideBatchSnapRequested()
+{
+    if (externalEditActive_)
+        return;
+    if (!pianoRoll_.hasGuide()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), LOC(kGuideNeedGuide));
+        return;
+    }
+    const auto& guide = pianoRoll_.getGuideNotes();
+    std::vector<std::unique_ptr<UndoAction>> undoActions;
+    int clips = 0, notesMoved = 0, notesCreated = 0, notReady = 0;
+
+    for (const auto& ref : collectGuideTargetPlacements(false)) {
+        const ContentKey key = ref.placement.contentKey;
+        auto snap = processorRef_.getContentSnapshot(key);
+        if (snap == nullptr || snap->originalF0State != OriginalF0State::Ready || !snap->hasUsableOriginalF0()) {
+            ++notReady;
+            continue;
+        }
+        // ノートが無ければ先に作る（音程は変えない）
+        if (snap->notes.empty()) {
+            if (!processorRef_.generateNotesOnlyByContentKey(key, pianoRoll_.getCurrentAutoTuneParams()))
+                continue;
+            ++notesCreated;
+            snap = processorRef_.getContentSnapshot(key);
+            if (snap == nullptr || snap->notes.empty())
+                continue;
+        }
+
+        const auto projection = makePianoRollProjection(ref.placement, processorRef_);
+        const auto timeGrid = snap->timeGrid;
+        auto toTimeline = [projection, timeGrid](double src) {
+            return projection.projectContentTimeToTimeline(timeGrid->tauForward(src));
+        };
+        const int moved = processorRef_.retargetContentNotes(
+            key,
+            [&guide, toTimeline](const Note& note, float currentMidi) -> std::optional<float> {
+                return guideSnapTarget(guide, toTimeline(note.startTime), toTimeline(note.endTime), currentMidi);
+            },
+            pianoRoll_.getCurrentAutoTuneParams().retuneSpeed,
+            pianoRoll_.getCurrentAutoTuneParams().vibratoDepth,
+            pianoRoll_.getCurrentAutoTuneParams().vibratoRate,
+            LOC_RAW("Snap to guide"),
+            &undoActions);
+        if (moved > 0) {
+            ++clips;
+            notesMoved += moved;
+        }
+    }
+
+    if (!undoActions.empty())
+        processorRef_.getUndoManager().addAction(std::make_unique<GuideGroupedUndoAction>(
+            LOC_RAW("Snap all clips to guide"), std::move(undoActions)));
+    arrangementView_.requestContentRedraw();
+    if (notesMoved > 0 || notesCreated > 0)
+        projectSession_.markDirty();
+
+    juce::String msg;
+    msg << LOC(kGuideBatchSnapDone) << " " << clips << " / " << notesMoved << "\n";
+    if (notesCreated > 0)
+        msg << LOC(kGuideBatchNotesDone) << " " << notesCreated << "\n";
+    if (notReady > 0)
+        msg << LOC(kGuideBatchNotReady) << " " << notReady << "\n";
+    msg << "\n" << LOC(kGuideBatchUndoHint);
+    ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), msg);
+}
+
+void OpenTuneAudioProcessorEditor::guideShowKeysRequested()
+{
+    if (!pianoRoll_.hasGuide()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), LOC(kGuideNeedGuide));
+        return;
+    }
+    ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideKeys), describeGuideKeys());
+}
+
 void OpenTuneAudioProcessorEditor::guideImportRequested()
 {
     if (guideAnalysisInProgress_) {
@@ -3945,6 +4113,8 @@ void OpenTuneAudioProcessorEditor::guideImportRequested()
                         AppLogger::log("[Guide] loaded " + fileName + " notes=" + juce::String(static_cast<int>(notes.size())));
                         safeThis->pianoRoll_.setGuideNotes(std::move(notes));
                         safeThis->pianoRoll_.setGuideVisible(true);
+                        ConfirmDialogContent::showMessage(&safeThis->contentRoot_, LOC(kGuideKeys),
+                                                          safeThis->describeGuideKeys() + "\n" + LOC(kGuideKeysHint));
                     });
                 });
             });
@@ -4023,8 +4193,25 @@ void OpenTuneAudioProcessorEditor::harmonyRequested(int degreeSteps)
     arrangementView_.setVisibleTrackCount(visibleCount + 1);
     trackPanel_.setTrackColour(targetSlot, arrangement->getTrackColour(sourceTrack));
 
-    // 複製したクリップのノートを曲のキーに沿って移動（ボコーダーで再合成される）
-    pianoRoll_.shiftContentNotesDiatonic(harmonyKey, degreeSteps);
+    // 複製したクリップのノートを曲のキーに沿って移動（ボコーダーで再合成される）。
+    // お手本があれば、お手本から判定したキー（転調込み）をノートの時刻ごとに使う。
+    const auto& keySegments = pianoRoll_.getGuideKeySegments();
+    if (!keySegments.empty()) {
+        const auto projection = makePianoRollProjection(dup, processorRef_);
+        const auto timeGrid = snapshot->timeGrid;
+        const auto params = pianoRoll_.getCurrentAutoTuneParams();
+        processorRef_.retargetContentNotes(
+            harmonyKey,
+            [keySegments, projection, timeGrid, degreeSteps](const Note& note, float currentMidi) -> std::optional<float> {
+                const double mid = 0.5 * (note.startTime + note.endTime);
+                const double t = projection.projectContentTimeToTimeline(timeGrid->tauForward(mid));
+                return diatonicShiftMidiInKey(currentMidi, guideKeyAt(keySegments, t), degreeSteps);
+            },
+            params.retuneSpeed, params.vibratoDepth, params.vibratoRate,
+            LOC_RAW("Create harmony"));
+    } else {
+        pianoRoll_.shiftContentNotesDiatonic(harmonyKey, degreeSteps);
+    }
 
     arrangementView_.requestContentRedraw();
     projectSession_.markDirty();

@@ -73,6 +73,9 @@ public:
         virtual void guideVisibleToggled(bool shouldShow) { juce::ignoreUnused(shouldShow); }
         virtual void snapToGuideRequested() {}
         virtual void harmonyRequested(int degreeSteps) { juce::ignoreUnused(degreeSteps); }
+        virtual void guideBatchNotesRequested() {}
+        virtual void guideBatchSnapRequested() {}
+        virtual void guideShowKeysRequested() {}
     };
 
     explicit MenuBarComponent(OpenTuneAudioProcessor& processor, Profile profile = Profile::Standalone);
@@ -182,6 +185,9 @@ private:
         GuideClear,
         GuideShow,
         GuideSnap,
+        GuideBatchNotes,
+        GuideBatchSnap,
+        GuideShowKeys,
         Harmony3rdUp = 310,
         Harmony3rdDown,
         Harmony4thDown,

@@ -125,6 +125,9 @@ public:
     void guideVisibleToggled(bool shouldShow) override;
     void snapToGuideRequested() override;
     void harmonyRequested(int degreeSteps) override;
+    void guideBatchNotesRequested() override;
+    void guideBatchSnapRequested() override;
+    void guideShowKeysRequested() override;
     void onboardingRequested() override;
 
     // TransportBarComponent::Listener
@@ -275,6 +278,12 @@ private:
     AsyncAudioLoader asyncAudioLoader_;
     AsyncAudioLoader guideAudioLoader_;   // [GuideHarmony] お手本読み込み専用
     bool guideAnalysisInProgress_ = false;
+    struct GuidePlacementRef {
+        int trackId = -1;
+        StandaloneArrangement::Placement placement;
+    };
+    std::vector<GuidePlacementRef> collectGuideTargetPlacements(bool includeHarmony) const;
+    juce::String describeGuideKeys() const;
     bool isImportInProgress_ = false;
     
     // 多文件导入队列（解决并发导入问题）

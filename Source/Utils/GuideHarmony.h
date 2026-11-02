@@ -7,8 +7,10 @@
 #include "NoteGeneratorTypes.h"
 #include "PitchUtils.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace OpenTune {
@@ -54,6 +56,237 @@ inline float snapMidiToGuidePitchClass(float currentMidi, float guideMidi)
     const int pc = ((static_cast<int>(std::lround(guideMidi)) % 12) + 12) % 12;
     const float k = std::round((currentMidi - static_cast<float>(pc)) / 12.0f);
     return static_cast<float>(pc) + 12.0f * k;
+}
+
+/** タイムライン区間 [t0, t1) のノートに対するお手本スナップ先。
+ *  重なりが最大のお手本ノートの音名へ（オクターブは現在位置に最も近いもの）。
+ *  お手本との重なりがノート長の minOverlapRatio 未満なら nullopt（ハモリ・アドリブ等は触らない）。
+ *  guide は startSeconds 昇順であること。 */
+inline std::optional<float> guideSnapTarget(const std::vector<GuideNote>& guide,
+                                            double t0, double t1, float currentMidi,
+                                            double minOverlapRatio = 0.3)
+{
+    const double len = t1 - t0;
+    if (len <= 0.0)
+        return std::nullopt;
+    const GuideNote* best = nullptr;
+    double bestOverlap = 0.0;
+    for (const auto& gn : guide) {
+        if (gn.startSeconds >= t1)
+            break;
+        const double ov = std::min(t1, gn.endSeconds) - std::max(t0, gn.startSeconds);
+        if (ov > bestOverlap) {
+            bestOverlap = ov;
+            best = &gn;
+        }
+    }
+    if (best == nullptr || bestOverlap < minOverlapRatio * len)
+        return std::nullopt;
+    return snapMidiToGuidePitchClass(currentMidi, best->midi);
+}
+
+// ============================================================================
+// キー（調号）判定：お手本のメロディから、転調も含めて区間ごとに判定する。
+// 平行調（D メジャー / B マイナー等）は使う音が同じなので区別せず、
+// 「メジャー側の主音」で表す（ダイアトニックなハモリはこれで決まる）。
+// ============================================================================
+
+/** ある時刻から有効なキー。root = メジャー側の主音（0=C … 11=B）。 */
+struct GuideKeySegment {
+    double startSeconds = 0.0;
+    int root = 0;
+};
+
+inline std::string guideKeyName(int majorRoot)
+{
+    static const char* names[] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
+    const int r = ((majorRoot % 12) + 12) % 12;
+    const int minorRoot = (r + 9) % 12;
+    return std::string(names[r]) + " / " + names[minorRoot] + "m";
+}
+
+inline std::string formatSecondsMMSS(double seconds)
+{
+    const int total = std::max(0, static_cast<int>(std::floor(seconds)));
+    const int sec = total % 60;
+    return std::to_string(total / 60) + ":" + (sec < 10 ? "0" : "") + std::to_string(sec);
+}
+
+/** 区間リストから時刻 t のキー（メジャー側の主音）。空なら -1。 */
+inline int guideKeyAt(const std::vector<GuideKeySegment>& segments, double t)
+{
+    if (segments.empty())
+        return -1;
+    int root = segments.front().root;
+    for (const auto& seg : segments) {
+        if (seg.startSeconds > t)
+            break;
+        root = seg.root;
+    }
+    return root;
+}
+
+namespace GuideKeyDetail {
+/** 12 次元のピッチクラス分布と、調号 root（メジャー主音）のスコア。
+ *  Krumhansl-Kessler のメジャー／平行マイナーのプロファイル相関の大きい方。 */
+inline double keyScore(const double (&hist)[12], int root)
+{
+    static constexpr double kMajor[12] = { 6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88 };
+    static constexpr double kMinor[12] = { 6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17 };
+    auto corr = [&hist](const double (&profile)[12], int tonic) {
+        double mh = 0.0, mp = 0.0;
+        for (int i = 0; i < 12; ++i) { mh += hist[i]; mp += profile[i]; }
+        mh /= 12.0; mp /= 12.0;
+        double num = 0.0, dh = 0.0, dp = 0.0;
+        for (int i = 0; i < 12; ++i) {
+            const double h = hist[(i + tonic) % 12] - mh;
+            const double p = profile[i] - mp;
+            num += h * p; dh += h * h; dp += p * p;
+        }
+        return (dh <= 0.0 || dp <= 0.0) ? 0.0 : num / std::sqrt(dh * dp);
+    };
+    return std::max(corr(kMajor, root), corr(kMinor, (root + 9) % 12));
+}
+
+inline void histogram(const std::vector<GuideNote>& notes, double w0, double w1, double (&hist)[12], double& total)
+{
+    for (auto& h : hist) h = 0.0;
+    total = 0.0;
+    for (const auto& n : notes) {
+        const double ov = std::min(w1, n.endSeconds) - std::max(w0, n.startSeconds);
+        if (ov <= 0.0)
+            continue;
+        const int pc = ((static_cast<int>(std::lround(n.midi)) % 12) + 12) % 12;
+        hist[pc] += ov;
+        total += ov;
+    }
+}
+} // namespace GuideKeyDetail
+
+/** お手本ノートから、転調を含むキー区間を推定する。
+ *  windowSeconds 幅の窓を hopSeconds ずつずらしてキーらしさを出し、
+ *  キーが切り替わるたびに switchPenalty を払う最適経路（Viterbi）で区間に分ける。 */
+inline std::vector<GuideKeySegment> estimateGuideKeySegments(const std::vector<GuideNote>& notes,
+                                                             double windowSeconds = 16.0,
+                                                             double hopSeconds = 2.0,
+                                                             double switchPenalty = 2.5)
+{
+    std::vector<GuideKeySegment> result;
+    if (notes.empty())
+        return result;
+
+    double songEnd = 0.0;
+    for (const auto& n : notes)
+        songEnd = std::max(songEnd, n.endSeconds);
+
+    // 曲全体のキー（窓が作れない短い素材でも使う）
+    double hist[12];
+    double total = 0.0;
+    GuideKeyDetail::histogram(notes, 0.0, songEnd, hist, total);
+    if (total <= 0.0)
+        return result;
+    int globalRoot = 0;
+    double globalBest = -1e9;
+    for (int r = 0; r < 12; ++r) {
+        const double sc = GuideKeyDetail::keyScore(hist, r);
+        if (sc > globalBest) { globalBest = sc; globalRoot = r; }
+    }
+
+    const int numWindows = songEnd > windowSeconds
+        ? static_cast<int>(std::floor((songEnd - windowSeconds) / hopSeconds)) + 1
+        : 0;
+    if (numWindows < 2) {
+        result.push_back({ 0.0, globalRoot });
+        return result;
+    }
+
+    std::vector<std::array<double, 12>> emission(static_cast<size_t>(numWindows));
+    for (int w = 0; w < numWindows; ++w) {
+        const double w0 = w * hopSeconds;
+        GuideKeyDetail::histogram(notes, w0, w0 + windowSeconds, hist, total);
+        for (int r = 0; r < 12; ++r)
+            emission[static_cast<size_t>(w)][static_cast<size_t>(r)] =
+                total >= 2.0 ? GuideKeyDetail::keyScore(hist, r) : 0.0;   // 音が少ない窓は中立
+    }
+
+    // Viterbi（最初の窓は曲全体のキーを少し優遇）
+    std::vector<std::array<double, 12>> score(static_cast<size_t>(numWindows));
+    std::vector<std::array<int, 12>> back(static_cast<size_t>(numWindows));
+    for (int r = 0; r < 12; ++r)
+        score[0][static_cast<size_t>(r)] = emission[0][static_cast<size_t>(r)] + (r == globalRoot ? 0.5 : 0.0);
+    for (int w = 1; w < numWindows; ++w) {
+        for (int r = 0; r < 12; ++r) {
+            double best = -1e18;
+            int arg = r;
+            for (int q = 0; q < 12; ++q) {
+                const double v = score[static_cast<size_t>(w - 1)][static_cast<size_t>(q)] - (q == r ? 0.0 : switchPenalty);
+                if (v > best) { best = v; arg = q; }
+            }
+            score[static_cast<size_t>(w)][static_cast<size_t>(r)] = best + emission[static_cast<size_t>(w)][static_cast<size_t>(r)];
+            back[static_cast<size_t>(w)][static_cast<size_t>(r)] = arg;
+        }
+    }
+    std::vector<int> path(static_cast<size_t>(numWindows));
+    {
+        int r = 0;
+        double best = -1e18;
+        for (int q = 0; q < 12; ++q)
+            if (score[static_cast<size_t>(numWindows - 1)][static_cast<size_t>(q)] > best) {
+                best = score[static_cast<size_t>(numWindows - 1)][static_cast<size_t>(q)];
+                r = q;
+            }
+        for (int w = numWindows - 1; w >= 0; --w) {
+            path[static_cast<size_t>(w)] = r;
+            if (w > 0)
+                r = back[static_cast<size_t>(w)][static_cast<size_t>(r)];
+        }
+    }
+
+    // 区間化：切り替わり位置は、窓から出したおおよその位置 ±8 秒のお手本ノートの頭のうち、
+    // 「前は旧キー・後ろは新キー」で数えたスケール外の音の長さが最も少ない所にする。
+    auto inMajorScale = [](float midi, int root) {
+        static constexpr bool kIn[12] = { true, false, true, false, true, true, false, true, false, true, false, true };
+        const int pc = ((static_cast<int>(std::lround(midi)) - root) % 12 + 12) % 12;
+        return kIn[pc];
+    };
+    result.push_back({ 0.0, path[0] });
+    for (int w = 1; w < numWindows; ++w) {
+        const int oldRoot = path[static_cast<size_t>(w - 1)];
+        const int newRoot = path[static_cast<size_t>(w)];
+        if (newRoot == oldRoot)
+            continue;
+        const double approx = w * hopSeconds + windowSeconds * 0.5;
+        const double lo = std::max(result.back().startSeconds + hopSeconds, approx - 8.0);
+        const double hi = approx + 8.0;
+        double boundary = approx;
+        double bestCost = 1e18;
+        for (const auto& cand : notes) {
+            if (cand.startSeconds < lo || cand.startSeconds > hi)
+                continue;
+            double cost = 0.0;
+            for (const auto& n : notes) {
+                if (n.endSeconds <= lo || n.startSeconds >= hi)
+                    continue;
+                const int root = n.startSeconds < cand.startSeconds ? oldRoot : newRoot;
+                if (!inMajorScale(n.midi, root))
+                    cost += n.endSeconds - n.startSeconds;
+            }
+            // 同点なら approx に近い方
+            cost += 1e-3 * std::abs(cand.startSeconds - approx);
+            if (cost < bestCost) { bestCost = cost; boundary = cand.startSeconds; }
+        }
+        if (boundary <= result.back().startSeconds)
+            boundary = result.back().startSeconds + hopSeconds;
+        result.push_back({ boundary, newRoot });
+    }
+    return result;
+}
+
+
+/** 調号 root（メジャー主音）で degreeSteps 度移動した MIDI。 */
+inline float diatonicShiftMidiInKey(float currentMidi, int majorRoot, int degreeSteps)
+{
+    return diatonicShiftMidi(currentMidi, majorRoot, ScaleMode::Major, degreeSteps);
 }
 
 } // namespace OpenTune

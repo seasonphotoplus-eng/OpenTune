@@ -151,8 +151,12 @@ juce::PopupMenu MenuBarComponent::getMenuForIndex(int topLevelMenuIndex, const j
                 juce::PopupMenu guideMenu;
                 guideMenu.addItem(GuideImport, LOC(kGuideImport));
                 guideMenu.addItem(GuideShow, LOC(kGuideShow), hasGuide, guideVisible);
-                guideMenu.addItem(GuideSnap, LOC(kGuideSnap), hasGuide);
+                guideMenu.addItem(GuideShowKeys, LOC(kGuideKeys), hasGuide);
                 guideMenu.addItem(GuideClear, LOC(kGuideClear), hasGuide);
+                guideMenu.addSeparator();
+                guideMenu.addItem(GuideBatchSnap, LOC(kGuideBatchSnap), hasGuide);
+                guideMenu.addItem(GuideBatchNotes, LOC(kGuideBatchNotes));
+                guideMenu.addItem(GuideSnap, LOC(kGuideSnap), hasGuide);
                 guideMenu.addSeparator();
                 juce::PopupMenu harmonyMenu;
                 harmonyMenu.addItem(Harmony3rdUp, LOC(kHarmony3rdUp));
@@ -299,6 +303,15 @@ void MenuBarComponent::menuItemSelected(int menuItemID, int topLevelMenuIndex)
         }
         case GuideSnap:
             listeners_.call([](Listener& l) { l.snapToGuideRequested(); });
+            break;
+        case GuideBatchNotes:
+            listeners_.call([](Listener& l) { l.guideBatchNotesRequested(); });
+            break;
+        case GuideBatchSnap:
+            listeners_.call([](Listener& l) { l.guideBatchSnapRequested(); });
+            break;
+        case GuideShowKeys:
+            listeners_.call([](Listener& l) { l.guideShowKeysRequested(); });
             break;
         case Harmony3rdUp:   listeners_.call([](Listener& l) { l.harmonyRequested(+2); }); break;
         case Harmony3rdDown: listeners_.call([](Listener& l) { l.harmonyRequested(-2); }); break;

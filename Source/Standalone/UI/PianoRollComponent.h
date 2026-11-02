@@ -226,6 +226,8 @@ public:
     void setGuideVisible(bool visible);
     bool isGuideVisible() const noexcept { return guideVisible_; }
     bool hasGuide() const noexcept { return !guideNotes_.empty(); }
+    /** お手本から判定したキー区間（転調を含む）。お手本が無ければ空。 */
+    const std::vector<GuideKeySegment>& getGuideKeySegments() const noexcept { return guideKeySegments_; }
     /** 選択ノート（無選択なら全ノート）をお手本の音名に合わせる（オクターブは現在位置に最も近いもの）。戻り値=変更数 */
     int snapNotesToGuide();
     /** 選択ノート（無選択なら全ノート）を現在のキー/スケールに沿って degreeSteps 度ぶん移動（+2=3度上, -2=3度下, -5=6度下, +4=5度上）。 */
@@ -583,6 +585,7 @@ private:
 
     // [GuideHarmony]
     std::vector<GuideNote> guideNotes_;
+    std::vector<GuideKeySegment> guideKeySegments_;
     bool guideVisible_ = true;
     float computeGuideOctaveShift() const;
     void drawGuideNotes(juce::Graphics& g, const ViewMapper& mapper, float pixelsPerSemitone, int height) const;

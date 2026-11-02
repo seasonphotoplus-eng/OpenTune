@@ -6260,6 +6260,7 @@ void PianoRollComponent::setGuideNotes(std::vector<GuideNote> notes)
     guideNotes_ = std::move(notes);
     std::sort(guideNotes_.begin(), guideNotes_.end(),
               [](const GuideNote& a, const GuideNote& b) { return a.startSeconds < b.startSeconds; });
+    guideKeySegments_ = estimateGuideKeySegments(guideNotes_);
     requestContentRedraw();
 }
 
@@ -6315,6 +6316,21 @@ void PianoRollComponent::drawGuideNotes(juce::Graphics& g, const ViewMapper& map
         g.setColour(edge);
         g.drawRoundedRectangle(r.reduced(0.5f), 2.0f, 1.0f);
     }
+
+    // お手本から判定したキー（転調位置）を上端に表示
+    g.setFont(UIColors::getUIFontExact(12.0f, juce::Font::plain));
+    for (const auto& seg : guideKeySegments_) {
+        const int x = mapper.timeToX(seg.startSeconds);
+        if (x > clip.getRight())
+            break;
+        g.setColour(juce::Colour::fromRGBA(255, 210, 120, 160));
+        g.drawVerticalLine(x, 0.0f, static_cast<float>(height));
+        const juce::String label = juce::String::fromUTF8(guideKeyName(seg.root).c_str());
+        g.setColour(juce::Colour::fromRGBA(20, 24, 32, 200));
+        g.fillRoundedRectangle(static_cast<float>(x + 2), 2.0f, 72.0f, 16.0f, 3.0f);
+        g.setColour(juce::Colour::fromRGBA(255, 210, 120, 255));
+        g.drawText(label, x + 6, 2, 68, 16, juce::Justification::centredLeft, false);
+    }
 }
 
 int PianoRollComponent::snapNotesToGuide()
@@ -6323,26 +6339,9 @@ int PianoRollComponent::snapNotesToGuide()
         return 0;
 
     auto target = [this](const Note& note, float currentMidi) -> std::optional<float> {
-        const double t0 = sourceTimeToTimelineTime(note.startTime);
-        const double t1 = sourceTimeToTimelineTime(note.endTime);
-        const double len = t1 - t0;
-        if (len <= 0.0)
-            return std::nullopt;
-        // 重なりが最大のお手本ノートを探す
-        const GuideNote* best = nullptr;
-        double bestOverlap = 0.0;
-        for (const auto& gn : guideNotes_) {
-            if (gn.startSeconds >= t1)
-                break;
-            const double ov = std::min(t1, gn.endSeconds) - std::max(t0, gn.startSeconds);
-            if (ov > bestOverlap) {
-                bestOverlap = ov;
-                best = &gn;
-            }
-        }
-        if (best == nullptr || bestOverlap < 0.3 * len)
-            return std::nullopt;   // お手本が鳴っていない所（ハモリ・アドリブ等）は触らない
-        return snapMidiToGuidePitchClass(currentMidi, best->midi);   // 音名だけ合わせる
+        // お手本が鳴っていない所（ハモリ・アドリブ等）は触らない
+        return guideSnapTarget(guideNotes_, sourceTimeToTimelineTime(note.startTime),
+                               sourceTimeToTimelineTime(note.endTime), currentMidi);
     };
     return toolHandler_->retargetNotesPitch(target, LOC_RAW("Snap to guide"));
 }

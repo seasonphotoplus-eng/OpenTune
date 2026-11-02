@@ -192,6 +192,16 @@ constexpr const char* kHarmony4thDown = "4th below";
 constexpr const char* kHarmony5thUp = "5th above";
 constexpr const char* kHarmony6thDown = "6th below";
 constexpr const char* kHarmonyNoClip = "Select a clip in the piano roll first.";
+constexpr const char* kGuideBatchSnap = "Snap ALL Clips to Guide (auto-create notes)";
+constexpr const char* kGuideBatchNotes = "Create Notes for All Clips";
+constexpr const char* kGuideBatchNotesDone = "Clips with new notes:";
+constexpr const char* kGuideBatchHadNotes = "Clips that already had notes (unchanged):";
+constexpr const char* kGuideBatchNotReady = "Clips still analyzing (skipped, try again later):";
+constexpr const char* kGuideBatchSnapDone = "Snapped clips / notes:";
+constexpr const char* kGuideBatchUndoHint = "Ctrl+Z undoes all of it at once. Harmony tracks are not touched.";
+constexpr const char* kGuideNeedGuide = "Load a guide track (MELO) first.";
+constexpr const char* kGuideKeys = "Keys Detected from Guide";
+constexpr const char* kGuideKeysHint = "Harmony tracks follow these keys (including key changes).";
 constexpr const char* kExportAudio = "Export Audio";
 constexpr const char* kExportSelectedClip = "Export Selected Clip";
 constexpr const char* kExportTrack = "Export Track";
@@ -545,7 +555,7 @@ inline juce::String get(Language lang, const char* key)
         { Keys::kGuideImport, "Load Guide Track (MELO)...", "载入参考音轨...", "お手本(MELO)を読み込み...", "Загрузить гид...", "Cargar guía..." },
         { Keys::kGuideClear, "Clear Guide", "清除参考", "お手本を消去", "Очистить гид", "Borrar guía" },
         { Keys::kGuideShow, "Show Guide", "显示参考", "お手本を表示", "Показать гид", "Mostrar guía" },
-        { Keys::kGuideSnap, "Snap Notes to Guide  (Ctrl+Shift+G)", "吸附到参考  (Ctrl+Shift+G)", "お手本の音名に合わせる  (Ctrl+Shift+G)", "Привязать к гиду  (Ctrl+Shift+G)", "Ajustar a la guía  (Ctrl+Shift+G)" },
+        { Keys::kGuideSnap, "Snap Notes to Guide  (Ctrl+Shift+G)", "吸附到参考  (Ctrl+Shift+G)", "選択ノートをお手本に合わせる  (Ctrl+Shift+G)", "Привязать к гиду  (Ctrl+Shift+G)", "Ajustar a la guía  (Ctrl+Shift+G)" },
         { Keys::kGuideAnalyzing, "Analyzing guide track...", "正在分析参考音轨...", "お手本を解析中...", "Анализ гида...", "Analizando guía..." },
         { Keys::kGuideFailed, "Could not analyze the guide track.", "参考音轨分析失败。", "お手本の解析に失敗しました。", "Не удалось проанализировать гид.", "No se pudo analizar la guía." },
         { Keys::kHarmonyMenu, "Create Harmony Track", "创建和声音轨", "ハモリトラックを作成", "Создать гармонию", "Crear armonía" },
@@ -554,6 +564,16 @@ inline juce::String get(Language lang, const char* key)
         { Keys::kHarmony4thDown, "4th below", "下四度", "4度下", "Кварта вниз", "4ª abajo" },
         { Keys::kHarmony5thUp, "5th above", "上五度", "5度上", "Квинта вверх", "5ª arriba" },
         { Keys::kHarmony6thDown, "6th below", "下六度", "6度下", "Секста вниз", "6ª abajo" },
+        { Keys::kGuideBatchSnap, "Snap ALL Clips to Guide (auto-create notes)", "全部片段吸附到参考（自动生成音符）", "全クリップをお手本に合わせる（ノートも自動作成）", "Привязать все клипы к гиду", "Ajustar todos los clips a la guía" },
+        { Keys::kGuideBatchNotes, "Create Notes for All Clips", "为全部片段生成音符", "全クリップのノートを作成", "Создать ноты для всех клипов", "Crear notas en todos los clips" },
+        { Keys::kGuideBatchNotesDone, "Clips with new notes:", "已生成音符的片段：", "ノートを作成したクリップ:", "Клипы с новыми нотами:", "Clips con notas nuevas:" },
+        { Keys::kGuideBatchHadNotes, "Clips that already had notes (unchanged):", "已有音符的片段（未改动）：", "既にノートがあったクリップ（そのまま）:", "Клипы с нотами (без изменений):", "Clips que ya tenían notas:" },
+        { Keys::kGuideBatchNotReady, "Clips still analyzing (skipped, try again later):", "仍在分析的片段（已跳过）：", "解析中で飛ばしたクリップ（少し待って再実行）:", "Клипы ещё анализируются:", "Clips aún en análisis:" },
+        { Keys::kGuideBatchSnapDone, "Snapped clips / notes:", "已吸附片段 / 音符：", "合わせたクリップ数 / ノート数:", "Клипы / ноты:", "Clips / notas ajustadas:" },
+        { Keys::kGuideBatchUndoHint, "Ctrl+Z undoes all of it at once. Harmony tracks are not touched.", "Ctrl+Z 可一次全部撤销。和声音轨不受影响。", "Ctrl+Z 1回で全部元に戻せます。ハモリトラックは動かしません。", "Ctrl+Z отменяет всё сразу.", "Ctrl+Z lo deshace todo." },
+        { Keys::kGuideNeedGuide, "Load a guide track (MELO) first.", "请先载入参考音轨。", "先にお手本(MELO)を読み込んでください。", "Сначала загрузите гид.", "Primero carga la guía." },
+        { Keys::kGuideKeys, "Keys Detected from Guide", "参考音轨的调性", "お手本から判定したキー", "Тональности гида", "Tonalidades de la guía" },
+        { Keys::kGuideKeysHint, "Harmony tracks follow these keys (including key changes).", "和声音轨按这些调性生成（含转调）。", "ハモリトラックはこのキー（転調も含む）に沿って作られます。", "Гармония следует этим тональностям.", "La armonía sigue estas tonalidades." },
         { Keys::kHarmonyNoClip, "Select a clip in the piano roll first.", "请先在钢琴卷帘中选择片段。", "先にピアノロールでクリップを選んでください。", "Сначала выберите клип.", "Primero selecciona un clip." },
         { Keys::kExportAudio, "Export Audio", "导出音频", "オーディオをエクスポート", "Экспорт аудио", "Exportar audio" },
         { Keys::kExportSelectedClip, "Export Selected Clip", "导出选中的片段", "選択したクリップをエクスポート", "Экспорт клипа", "Exportar clip seleccionado" },

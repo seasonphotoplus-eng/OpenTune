@@ -4636,33 +4636,34 @@ SelectedNoteParameterEditResult OpenTuneAudioProcessor::editSelectedNoteParamete
     return result;
 }
 
-bool OpenTuneAudioProcessor::retargetContentNotes(
+int OpenTuneAudioProcessor::retargetContentNotes(
     ContentKey key,
     const std::function<std::optional<float>(const Note& note, float currentMidi)>& targetFn,
     float retuneSpeedDefault,
     float vibratoDepthDefault,
     float vibratoRateDefault,
-    juce::String undoDescription)
+    juce::String undoDescription,
+    std::vector<std::unique_ptr<UndoAction>>* undoSink)
 {
     auto* messageManager = juce::MessageManager::getInstanceWithoutCreating();
     if (messageManager == nullptr || !messageManager->isThisTheMessageThread() || !targetFn)
-        return false;
+        return 0;
 
     const auto snapshot = getContentSnapshot(key);
     if (snapshot == nullptr || snapshot->pitchCurve == nullptr || contentCommands_ == nullptr
         || snapshot->notes.empty())
-        return false;
+        return 0;
 
     const auto curveSnapshot = snapshot->pitchCurve;
     const F0Timeline timeline(curveSnapshot->getHopSize(), curveSnapshot->getSampleRate(),
                               static_cast<int>(curveSnapshot->size()));
     if (timeline.isEmpty())
-        return false;
+        return 0;
 
     auto afterNotes = snapshot->notes;
     double dirtyStart = 1e30;
     double dirtyEnd = -1e30;
-    bool changed = false;
+    int changedCount = 0;
     for (auto& note : afterNotes) {
         if (!note.isVoiced || note.pitch <= 0.0f)
             continue;
@@ -4675,16 +4676,16 @@ bool OpenTuneAudioProcessor::retargetContentNotes(
             continue;
         note.pitchOffset = newOffset;
         note.dirty = true;
-        changed = true;
+        ++changedCount;
         dirtyStart = std::min(dirtyStart, note.startTime);
         dirtyEnd = std::max(dirtyEnd, note.endTime);
     }
-    if (!changed)
-        return false;
+    if (changedCount == 0)
+        return 0;
 
     const auto editRange = timeline.rangeForTimes(dirtyStart, dirtyEnd);
     if (editRange.isEmpty())
-        return false;
+        return 0;
 
     auto derivedCurve = PitchCurve::fromSnapshot(curveSnapshot);
     const auto derivedSnapshot = derivedCurve->applyCorrectionToRange(
@@ -4692,7 +4693,7 @@ bool OpenTuneAudioProcessor::retargetContentNotes(
         static_cast<float>(snapshot->pitchShiftSettings.getPitchRatio()),
         retuneSpeedDefault, vibratoDepthDefault, vibratoRateDefault);
     if (derivedSnapshot == nullptr)
-        return false;
+        return 0;
 
     const auto affected = PitchCurve::expandNoteBasedCorrectionRange(
         editRange.startFrame, editRange.endFrameExclusive, timeline.endFrameExclusive());
@@ -4721,13 +4722,17 @@ bool OpenTuneAudioProcessor::retargetContentNotes(
     const ContentEditRangeFrames range{ affected.startFrame, affected.endFrameExclusive };
 
     if (contentCommands_->commitNotesAndSegments(key, afterInRange, afterSegs, range) == nullptr)
-        return false;
+        return 0;
 
-    undoManager_.addAction(std::make_unique<PianoRollEditAction>(
+    auto action = std::make_unique<PianoRollEditAction>(
         contentCommands_, key, std::move(undoDescription),
         std::move(beforeNotes), std::move(afterInRange),
-        std::move(beforeSegs), std::move(afterSegs), range));
-    return true;
+        std::move(beforeSegs), std::move(afterSegs), range);
+    if (undoSink != nullptr)
+        undoSink->push_back(std::move(action));
+    else
+        undoManager_.addAction(std::move(action));
+    return changedCount;
 }
 
 OpenTuneAudioProcessor::SelectedNoteEqEditResult OpenTuneAudioProcessor::editSelectedNoteEq(
