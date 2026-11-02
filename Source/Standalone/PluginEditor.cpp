@@ -4243,6 +4243,10 @@ void OpenTuneAudioProcessorEditor::guideImportRequested()
             return;
         const auto file = selectedFiles.getFirst();
         safeThis->guideAnalysisInProgress_ = true;
+        AppLogger::log("[Guide] import requested: " + file.getFullPathName());
+        // 解析は歌の解析が終わるのを待ってから走るので、すぐに「受け付けた」ことを知らせる
+        ConfirmDialogContent::showMessage(&safeThis->contentRoot_, LOC(kGuideMenu),
+                                          LOC(kGuideAnalyzing) + "\n" + file.getFileName() + "\n\n" + LOC(kGuideAnalyzingHint));
         safeThis->guideAudioLoader_.loadAudioFile(
             file,
             {},

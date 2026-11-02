@@ -197,6 +197,7 @@ constexpr const char* kExportAllChooseFolder = "Choose a folder for the exported
 constexpr const char* kExportAllDone = "Exported tracks:";
 constexpr const char* kExportAllFailed = "Failed:";
 constexpr const char* kExportAllNothing = "There are no tracks with audio to export.";
+constexpr const char* kGuideAnalyzingHint = "This can take a while (it waits for vocal analysis to finish). Open a clip in the piano roll to see the guide as grey bars.";
 constexpr const char* kGuideTiming = "Guide Timing";
 constexpr const char* kGuideAutoAlign = "Auto-align Guide to Vocals";
 constexpr const char* kGuideNudgeEarly10 = "10 ms Earlier  ( [ )";
@@ -585,6 +586,7 @@ inline juce::String get(Language lang, const char* key)
         { Keys::kExportAllDone, "Exported tracks:", "已导出音轨：", "書き出したトラック:", "Экспортировано:", "Pistas exportadas:" },
         { Keys::kExportAllFailed, "Failed:", "失败：", "失敗:", "Ошибка:", "Fallos:" },
         { Keys::kExportAllNothing, "There are no tracks with audio to export.", "没有可导出的音轨。", "書き出せるトラックがありません。", "Нет дорожек для экспорта.", "No hay pistas para exportar." },
+        { Keys::kGuideAnalyzingHint, "This can take a while (it waits for vocal analysis to finish). Open a clip in the piano roll to see the guide as grey bars.", "可能需要一些时间（会等待人声分析完成）。在钢琴卷帘中打开片段即可看到灰色参考条。", "歌の解析が終わってから解析するので、少し時間がかかることがあります。終わるとキーの一覧が出ます。お手本はピアノロール（クリップをダブルクリック）に灰色の帯で表示されます。", "Это может занять время.", "Puede tardar un poco." },
         { Keys::kGuideTiming, "Guide Timing", "参考时间对齐", "お手本の位置調整", "Сдвиг гида", "Ajuste de la guía" },
         { Keys::kGuideAutoAlign, "Auto-align Guide to Vocals", "自动对齐参考", "歌に合わせて自動で位置を合わせる", "Автовыравнивание гида", "Alinear guía automáticamente" },
         { Keys::kGuideNudgeEarly10, "10 ms Earlier  ( [ )", "提前 10 ms  ( [ )", "10ms 早く  ( [ )", "На 10 мс раньше  ( [ )", "10 ms antes  ( [ )" },
