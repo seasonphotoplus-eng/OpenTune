@@ -198,7 +198,7 @@ private:
         GuideNudgeEarly100,
         GuideNudgeLate100,
         GuideNudgeReset,
-        Harmony3rdUp = 310,
+        Harmony3rdUp = 350,
         Harmony3rdDown,
         Harmony4thDown,
         Harmony5thUp,
