@@ -367,6 +367,64 @@ inline double estimateGuideOffset(const std::vector<GuideNote>& guide,
     return bestOffset;
 }
 
+
+// ============================================================================
+// タイミング補正：歌の各ノートの頭を、近くにある同じ音名のお手本ノートの頭へ寄せる。
+// ============================================================================
+
+/** タイミング補正用の歌ノート（source 秒 = クリップ内の元の時刻、timeline 秒 = 今の曲上の時刻）。 */
+struct GuideTimingNote {
+    double sourceStart = 0.0;
+    double timelineStart = 0.0;
+    float midi = 0.0f;
+};
+
+/** (source 秒, 移動先のタイムライン秒) の組。 */
+struct GuideTimingAnchor {
+    double sourceSeconds = 0.0;
+    double targetTimelineSeconds = 0.0;
+};
+
+/** 各歌ノートについて、±maxShift 秒以内の同じ音名のお手本ノートの頭のうち一番近いものを選ぶ。
+ *  お手本ノート 1 つにつき歌ノート 1 つまで（近い組から確定）。見つからないノートは動かさない。 */
+inline std::vector<GuideTimingAnchor> computeGuideTimingAnchors(const std::vector<GuideTimingNote>& notes,
+                                                                const std::vector<GuideNote>& guide,
+                                                                double maxShiftSeconds = 0.15)
+{
+    struct Cand { double dist; size_t note; size_t guide; };
+    std::vector<Cand> cands;
+    for (size_t i = 0; i < notes.size(); ++i) {
+        const auto& n = notes[i];
+        const int pc = ((static_cast<int>(std::lround(n.midi)) % 12) + 12) % 12;
+        for (size_t j = 0; j < guide.size(); ++j) {
+            const auto& g = guide[j];
+            if (g.startSeconds > n.timelineStart + maxShiftSeconds)
+                break;
+            const double d = std::abs(g.startSeconds - n.timelineStart);
+            if (d > maxShiftSeconds)
+                continue;
+            const int gpc = ((static_cast<int>(std::lround(g.midi)) % 12) + 12) % 12;
+            if (gpc != pc)
+                continue;
+            cands.push_back({ d, i, j });
+        }
+    }
+    std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
+    std::vector<bool> noteUsed(notes.size(), false), guideUsed(guide.size(), false);
+    std::vector<GuideTimingAnchor> out;
+    for (const auto& c : cands) {
+        if (noteUsed[c.note] || guideUsed[c.guide])
+            continue;
+        noteUsed[c.note] = true;
+        guideUsed[c.guide] = true;
+        out.push_back({ notes[c.note].sourceStart, guide[c.guide].startSeconds });
+    }
+    std::sort(out.begin(), out.end(), [](const GuideTimingAnchor& a, const GuideTimingAnchor& b) {
+        return a.sourceSeconds < b.sourceSeconds;
+    });
+    return out;
+}
+
 /** 調号 root（メジャー主音）で degreeSteps 度移動した MIDI。 */
 inline float diatonicShiftMidiInKey(float currentMidi, int majorRoot, int degreeSteps)
 {

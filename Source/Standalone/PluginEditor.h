@@ -135,6 +135,7 @@ public:
     void guideBatchSnapRequested() override;
     void guideShowKeysRequested() override;
     void guideUseSelectedTrackRequested() override;
+    void guideTimingAlignRequested() override;
     void guideAutoAlignRequested() override;
     void guideNudgeRequested(int milliseconds) override;
     void onboardingRequested() override;
@@ -310,7 +311,19 @@ private:
     juce::String guideLastError_;
 
     // ---- [GuideHarmony] おまかせ補正（ワンボタン）----
-    enum class GuideWizardStep { Idle, WaitImport, WaitAnalysis, WaitGuide, Notes, Align, Snap, Done, Failed };
+    enum class GuideWizardStep { Idle, WaitImport, WaitAnalysis, WaitGuide, Notes, Align, Snap,
+                                 ExportPitch, Timing, ExportTiming, Done, Failed };
+    bool guideWizardExportStarted_ = false;
+    bool guideWizardExportFinished_ = false;
+    int guideWizardExportFailed_ = 0;
+    juce::String guideWizardExportMessage_;
+    juce::File guideWizardExportDir_;
+    struct ExportTrackJob { int trackId; juce::String baseName; };
+    std::vector<ExportTrackJob> collectExportTrackJobs(juce::File& initialDirOut) const;
+    bool startExportAllTracks(const juce::File& dir, const juce::String& suffix,
+                              std::function<void(const juce::String&, int)> onDone);
+    bool anyTimingCorrectionApplied() const;
+    GuideBatchStats runGuideTimingAlign();
     GuideWizardStep guideWizardStep_ = GuideWizardStep::Idle;
     double guideWizardStepStartMs_ = 0.0;
     juce::String guideWizardSummary_;

@@ -79,6 +79,7 @@ public:
         virtual void guideShowKeysRequested() {}
         virtual void guideWizardRequested() {}
         virtual void guideUseSelectedTrackRequested() {}
+        virtual void guideTimingAlignRequested() {}
         virtual void showAllTracksToggled(bool show) { juce::ignoreUnused(show); }
         virtual void guideAutoAlignRequested() {}
         virtual void guideNudgeRequested(int milliseconds) { juce::ignoreUnused(milliseconds); }  // 0 = リセット
@@ -199,6 +200,7 @@ private:
         GuideAutoAlign,
         GuideWizard,
         GuideUseSelectedTrack,
+        GuideTimingAlign,
         GuideShowAllTracks,
         GuideNudgeEarly10,
         GuideNudgeLate10,

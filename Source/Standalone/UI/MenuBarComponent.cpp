@@ -170,6 +170,7 @@ juce::PopupMenu MenuBarComponent::getMenuForIndex(int topLevelMenuIndex, const j
                 guideMenu.addItem(GuideClear, LOC(kGuideClear), hasGuide);
                 guideMenu.addSeparator();
                 guideMenu.addItem(GuideBatchSnap, LOC(kGuideBatchSnap), hasGuide);
+                guideMenu.addItem(GuideTimingAlign, LOC(kGuideTimingAlign), hasGuide);
                 guideMenu.addItem(GuideBatchNotes, LOC(kGuideBatchNotes));
                 guideMenu.addItem(GuideSnap, LOC(kGuideSnap), hasGuide);
                 guideMenu.addSeparator();
@@ -327,6 +328,9 @@ void MenuBarComponent::menuItemSelected(int menuItemID, int topLevelMenuIndex)
             break;
         case GuideBatchSnap:
             listeners_.call([](Listener& l) { l.guideBatchSnapRequested(); });
+            break;
+        case GuideTimingAlign:
+            listeners_.call([](Listener& l) { l.guideTimingAlignRequested(); });
             break;
         case GuideUseSelectedTrack:
             listeners_.call([](Listener& l) { l.guideUseSelectedTrackRequested(); });

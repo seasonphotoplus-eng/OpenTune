@@ -41,6 +41,8 @@
 #include "Utils/KeyShortcutConfig.h"
 #include "Utils/PlacementActions.h"
 #include "Utils/GuideTrackAnalysis.h"
+#include "Utils/TimeGridEditAction.h"
+#include "Utils/TimeGrid.h"
 #include <cmath>
 #include <atomic>
 #include <cstdlib>
@@ -4081,17 +4083,12 @@ void OpenTuneAudioProcessorEditor::guideBatchSnapRequested()
     ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), msg);
 }
 
-void OpenTuneAudioProcessorEditor::exportAllTracksRequested()
+std::vector<OpenTuneAudioProcessorEditor::ExportTrackJob>
+OpenTuneAudioProcessorEditor::collectExportTrackJobs(juce::File& initialDirOut) const
 {
-    if (exportInProgress_.load()) {
-        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kExportAudio), LOC(kExportInProgress));
-        return;
-    }
-
-    // トラックごとに「元のファイル名_ピッチ修正後.wav」を決める
-    struct TrackJob { int trackId; juce::String baseName; };
-    std::vector<TrackJob> jobs;
-    juce::File initialDir;
+    // トラックごとに「元のファイル名」を決める（お手本トラックは除く）
+    std::vector<ExportTrackJob> jobs;
+    initialDirOut = juce::File{};
     auto* arrangement = processorRef_.getStandaloneArrangement();
     auto* sourceStore = processorRef_.getSourceStore();
     const int visibleCount = trackPanel_.getVisibleTrackCount();
@@ -4108,7 +4105,7 @@ void OpenTuneAudioProcessorEditor::exportAllTracksRequested()
                 found = true;
             }
         }
-        if (!found || t == guideTrackId_)
+        if (!found || t == guideTrackId_ || t == pendingGuideTrackId_)
             continue;
 
         juce::String base;
@@ -4118,8 +4115,8 @@ void OpenTuneAudioProcessorEditor::exportAllTracksRequested()
                 if (src.sourceFilePath.isNotEmpty()) {
                     const juce::File f(src.sourceFilePath);
                     base = f.getFileNameWithoutExtension();
-                    if (initialDir == juce::File{})
-                        initialDir = f.getParentDirectory();
+                    if (initialDirOut == juce::File{})
+                        initialDirOut = f.getParentDirectory();
                 } else if (src.displayName.isNotEmpty()) {
                     base = juce::File::createFileWithoutCheckingPath(src.displayName).getFileNameWithoutExtension();
                 }
@@ -4131,66 +4128,205 @@ void OpenTuneAudioProcessorEditor::exportAllTracksRequested()
             base += juce::String::fromUTF8("_ハモリ");
         jobs.push_back({ t, juce::File::createLegalFileName(base) });
     }
+    return jobs;
+}
 
-    if (jobs.empty()) {
+bool OpenTuneAudioProcessorEditor::anyTimingCorrectionApplied() const
+{
+    for (const auto& ref : collectGuideTargetPlacements(true)) {
+        const auto snap = processorRef_.getContentSnapshot(ref.placement.contentKey);
+        if (snap != nullptr && snap->timeGrid != nullptr && !snap->timeGrid->isIdentity())
+            return true;
+    }
+    return false;
+}
+
+bool OpenTuneAudioProcessorEditor::startExportAllTracks(const juce::File& dir, const juce::String& suffix,
+                                                        std::function<void(const juce::String&, int)> onDone)
+{
+    if (exportInProgress_.load())
+        return false;
+    juce::File unused;
+    const auto jobs = collectExportTrackJobs(unused);
+    if (jobs.empty() || !dir.createDirectory().wasOk())
+        return false;
+
+    // ファイル名の重複を避ける
+    std::vector<std::pair<int, juce::File>> targets;
+    juce::StringArray used;
+    for (const auto& job : jobs) {
+        juce::String name = job.baseName + suffix;
+        for (int k = 2; used.contains(name, true); ++k)
+            name = job.baseName + "_" + juce::String(k) + suffix;
+        used.add(name);
+        targets.emplace_back(job.trackId, dir.getChildFile(name + ".wav"));
+    }
+
+    auto* processor = &processorRef_;
+    const auto exportLanguage = LocalizationManager::getInstance().resolveLanguage();
+    if (exportWorker_.joinable())
+        exportWorker_.join();
+    exportInProgress_.store(true);
+    juce::Component::SafePointer<OpenTuneAudioProcessorEditor> safeThis(this);
+
+    exportWorker_ = std::thread([processor, targets, safeThis, exportLanguage, onDone, dirPath = dir.getFullPathName()]()
+    {
+        juce::StringArray okNames, failLines;
+        for (const auto& [trackId, file] : targets) {
+            // 書き出しは描画（再合成）の完了を待ってから行われる（exportTrackAudio 内）
+            if (processor->exportTrackAudio(trackId, file, exportLanguage))
+                okNames.add(file.getFileName());
+            else
+                failLines.add(file.getFileName() + " : " + processor->getLastExportError());
+        }
+        juce::MessageManager::callAsync([safeThis, okNames, failLines, dirPath, onDone]()
+        {
+            if (safeThis == nullptr)
+                return;
+            safeThis->exportInProgress_.store(false);
+            juce::String msg;
+            msg << LOC(kExportAllDone) << " " << okNames.size() << "\n" << dirPath << "\n\n"
+                << okNames.joinIntoString("\n");
+            if (!failLines.isEmpty())
+                msg << "\n\n" << LOC(kExportAllFailed) << "\n" << failLines.joinIntoString("\n");
+            if (onDone)
+                onDone(msg, failLines.size());
+        });
+    });
+    return true;
+}
+
+void OpenTuneAudioProcessorEditor::exportAllTracksRequested()
+{
+    if (exportInProgress_.load()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kExportAudio), LOC(kExportInProgress));
+        return;
+    }
+    juce::File initialDir;
+    if (collectExportTrackJobs(initialDir).empty()) {
         ConfirmDialogContent::showMessage(&contentRoot_, LOC(kExportAudio), LOC(kExportAllNothing));
         return;
     }
     if (initialDir == juce::File{})
         initialDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
 
+    // タイミングも直していれば別の名前にする（ピッチだけの書き出しを上書きしない）
+    const auto suffix = juce::String::fromUTF8(anyTimingCorrectionApplied() ? "_ピッチタイミング修正後" : "_ピッチ修正後");
     auto chooser = std::make_shared<juce::FileChooser>(LOC(kExportAllChooseFolder), initialDir);
     juce::Component::SafePointer<OpenTuneAudioProcessorEditor> safeThis(this);
     chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
-                         [chooser, safeThis, jobs](const juce::FileChooser& fc)
+                         [chooser, safeThis, suffix](const juce::FileChooser& fc)
     {
         if (safeThis == nullptr)
             return;
         const auto dir = fc.getResult();
         if (dir == juce::File{} || !dir.isDirectory())
             return;
-
-        // ファイル名の重複を避ける
-        std::vector<std::pair<int, juce::File>> targets;
-        juce::StringArray used;
-        const auto suffix = juce::String::fromUTF8("_ピッチ修正後");
-        for (const auto& job : jobs) {
-            juce::String name = job.baseName + suffix;
-            for (int k = 2; used.contains(name, true); ++k)
-                name = job.baseName + "_" + juce::String(k) + suffix;
-            used.add(name);
-            targets.emplace_back(job.trackId, dir.getChildFile(name + ".wav"));
-        }
-
-        auto* processor = &safeThis->processorRef_;
-        const auto exportLanguage = LocalizationManager::getInstance().resolveLanguage();
-        if (safeThis->exportWorker_.joinable())
-            safeThis->exportWorker_.join();
-        safeThis->exportInProgress_.store(true);
-
-        safeThis->exportWorker_ = std::thread([processor, targets, safeThis, exportLanguage]()
-        {
-            juce::StringArray okNames, failLines;
-            for (const auto& [trackId, file] : targets) {
-                if (processor->exportTrackAudio(trackId, file, exportLanguage))
-                    okNames.add(file.getFileName());
-                else
-                    failLines.add(file.getFileName() + " : " + processor->getLastExportError());
-            }
-            juce::MessageManager::callAsync([safeThis, okNames, failLines, dirPath = targets.front().second.getParentDirectory().getFullPathName()]()
-            {
-                if (safeThis == nullptr)
-                    return;
-                safeThis->exportInProgress_.store(false);
-                juce::String msg;
-                msg << LOC(kExportAllDone) << " " << okNames.size() << "\n" << dirPath << "\n\n"
-                    << okNames.joinIntoString("\n");
-                if (!failLines.isEmpty())
-                    msg << "\n\n" << LOC(kExportAllFailed) << "\n" << failLines.joinIntoString("\n");
+        safeThis->startExportAllTracks(dir, suffix, [safeThis](const juce::String& msg, int) {
+            if (safeThis != nullptr)
                 ConfirmDialogContent::showMessage(&safeThis->contentRoot_, LOC(kExportAudio), msg);
-            });
         });
     });
+}
+
+// ============================================================================
+// [GuideHarmony] タイミング補正：各ノートの頭を、近くの同じ音名のお手本ノートの頭へ寄せる
+// （TimeGrid のアンカーで伸び縮み。Ctrl+Z 1回で全クリップ分を戻せる）
+// ============================================================================
+OpenTuneAudioProcessorEditor::GuideBatchStats OpenTuneAudioProcessorEditor::runGuideTimingAlign()
+{
+    GuideBatchStats st;
+    if (!pianoRoll_.hasGuide())
+        return st;
+    const auto guide = pianoRoll_.getGuideNotes();
+    auto commands = processorRef_.getContentCommands();
+    if (commands == nullptr)
+        return st;
+    std::vector<std::unique_ptr<UndoAction>> undoActions;
+
+    for (const auto& ref : collectGuideTargetPlacements(false)) {
+        const ContentKey key = ref.placement.contentKey;
+        const auto snap = processorRef_.getContentSnapshot(key);
+        if (snap == nullptr || snap->notes.empty() || snap->timeGrid == nullptr) {
+            ++st.notReady;
+            continue;
+        }
+        const auto oldGrid = snap->timeGrid;
+        const double total = oldGrid->totalDurationSeconds();
+        if (total <= 0.5)
+            continue;
+        const auto projection = makePianoRollProjection(ref.placement, processorRef_);
+
+        // 今の位置（タイミング補正前に戻した状態＝ identity で考える）から合わせる
+        std::vector<GuideTimingNote> vocal;
+        for (const auto& note : snap->notes) {
+            const float pitch = note.getAdjustedPitch();
+            if (!note.isVoiced || pitch <= 0.0f || note.endTime - note.startTime < 0.08)
+                continue;
+            vocal.push_back({ note.startTime, projection.projectContentTimeToTimeline(note.startTime),
+                              PitchUtils::freqToMidi(pitch) });
+        }
+        const auto anchors = computeGuideTimingAnchors(vocal, guide);
+
+        std::vector<TimeHandle> handles;
+        uint64_t nextId = 1;
+        for (const auto& h : oldGrid->handles())
+            nextId = std::max(nextId, h.id + 1);
+        handles.push_back(TimeHandle{ nextId++, 0.0, 0.0, HandleKind::ClipStart, Confidence::Default });
+        int placed = 0;
+        for (const auto& a : anchors) {
+            const double src = a.sourceSeconds;
+            const double out = projection.projectTimelineTimeToContent(a.targetTimelineSeconds);
+            const auto& prev = handles.back();
+            const double ds = src - prev.source_seconds;
+            const double dout = out - prev.output_seconds;
+            if (ds < TimeGridSnapshot::kMinSourceSpacingSeconds + 0.001
+                || dout < TimeGridSnapshot::kMinOutputSpacingSeconds + 0.001
+                || total - src < TimeGridSnapshot::kMinSourceSpacingSeconds + 0.001
+                || total - out < TimeGridSnapshot::kMinOutputSpacingSeconds + 0.001)
+                continue;
+            const double ratio = dout / ds;
+            if (ratio < 0.5 || ratio > 2.0)   // 伸び縮みが大きすぎる所は触らない
+                continue;
+            handles.push_back(TimeHandle{ nextId++, src, out, HandleKind::UserAdded, Confidence::Default });
+            ++placed;
+        }
+        handles.push_back(TimeHandle{ nextId++, total, total, HandleKind::ClipEnd, Confidence::Default });
+        if (placed == 0)
+            continue;
+
+        auto newGrid = TimeGridSnapshot::makeFromHandles(std::move(handles));
+        if (newGrid == nullptr)
+            continue;
+        if (!commands->setTimeGrid(key, newGrid))
+            continue;
+        undoActions.push_back(std::make_unique<TimeGridEditAction>(
+            commands, key, LOC_RAW("Align timing to guide"), oldGrid, newGrid));
+        ++st.clips;
+        st.moved += placed;
+    }
+
+    if (!undoActions.empty())
+        processorRef_.getUndoManager().addAction(std::make_unique<GuideGroupedUndoAction>(
+            LOC_RAW("Align timing to guide"), std::move(undoActions)));
+    arrangementView_.requestContentRedraw();
+    if (st.moved > 0)
+        projectSession_.markDirty();
+    return st;
+}
+
+void OpenTuneAudioProcessorEditor::guideTimingAlignRequested()
+{
+    if (externalEditActive_)
+        return;
+    if (!pianoRoll_.hasGuide()) {
+        ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), LOC(kGuideNeedGuide));
+        return;
+    }
+    const auto st = runGuideTimingAlign();
+    juce::String msg;
+    msg << LOC(kGuideTimingDone) << " " << st.clips << " / " << st.moved << "\n\n" << LOC(kGuideBatchUndoHint);
+    ConfirmDialogContent::showMessage(&contentRoot_, LOC(kGuideMenu), msg);
 }
 
 bool OpenTuneAudioProcessorEditor::runGuideAutoAlign(double& offsetOut, double& confidenceOut)
@@ -4303,7 +4439,8 @@ void OpenTuneAudioProcessorEditor::showAllTracksToggled(bool show)
 // 歌の読み込み → お手本の読み込み → 解析待ち → ノート作成 → お手本の位置合わせ → 全トラックをお手本に合わせる
 // ============================================================================
 namespace {
-enum GuideWizardRow { RowImport = 0, RowAnalysis, RowGuide, RowNotes, RowAlign, RowSnap, RowCount };
+enum GuideWizardRow { RowImport = 0, RowAnalysis, RowGuide, RowNotes, RowAlign, RowSnap,
+                      RowExportPitch, RowTiming, RowExportTiming, RowCount };
 }
 
 void OpenTuneAudioProcessorEditor::layoutGuideOverlays()
@@ -4455,6 +4592,9 @@ void OpenTuneAudioProcessorEditor::guideWizardStart()
     steps[RowNotes].label    = LOC(kGuideWizStepNotes);
     steps[RowAlign].label    = LOC(kGuideWizStepAlign);
     steps[RowSnap].label     = LOC(kGuideWizStepSnap);
+    steps[RowExportPitch].label  = LOC(kGuideWizStepExportPitch);
+    steps[RowTiming].label       = LOC(kGuideWizStepTiming);
+    steps[RowExportTiming].label = LOC(kGuideWizStepExportTiming);
     guideWizardPanel_->setTitle(LOC(kGuideWizard));
     guideWizardPanel_->setSteps(std::move(steps));
     guideWizardPanel_->setFooter(LOC(kGuideWizRunningHint));
@@ -4466,8 +4606,8 @@ void OpenTuneAudioProcessorEditor::guideWizardStart()
 
 static int guideWizardRowFor(int step)
 {
-    // GuideWizardStep の並び（Idle=0, WaitImport=1, …, Snap=6）→ 表示行
-    return step >= 1 && step <= 6 ? step - 1 : RowCount;
+    // GuideWizardStep の並び（Idle=0, WaitImport=1, …, ExportTiming=9）→ 表示行
+    return step >= 1 && step <= 9 ? step - 1 : RowCount;
 }
 
 void OpenTuneAudioProcessorEditor::guideWizardSetStep(GuideWizardStep step)
@@ -4488,6 +4628,7 @@ void OpenTuneAudioProcessorEditor::guideWizardSetStep(GuideWizardStep step)
         case GuideWizardStep::Notes: guideWizardPanel_->setDetail(LOC(kGuideWizDetailNotes)); break;
         case GuideWizardStep::Align: guideWizardPanel_->setDetail(LOC(kGuideWizDetailAlign)); break;
         case GuideWizardStep::Snap:  guideWizardPanel_->setDetail(LOC(kGuideWizDetailSnap)); break;
+        case GuideWizardStep::Timing: guideWizardPanel_->setDetail(LOC(kGuideWizDetailTiming)); break;
         default: break;
     }
     layoutGuideOverlays();
@@ -4602,15 +4743,71 @@ void OpenTuneAudioProcessorEditor::guideWizardTick()
         case GuideWizardStep::Snap: {
             const auto st = runGuideBatchSnap();
             done(RowSnap);
+            guideWizardSummary_ << LOC(kGuideBatchSnapDone) << " " << st.clips << " / " << st.moved << "\n";
+            guideWizardSetStep(GuideWizardStep::ExportPitch);
+            guideWizardExportStarted_ = false;
+            return;
+        }
+        case GuideWizardStep::ExportPitch:
+        case GuideWizardStep::ExportTiming: {
+            const bool pitchOnly = guideWizardStep_ == GuideWizardStep::ExportPitch;
+            if (!guideWizardExportStarted_) {
+                if (exportInProgress_.load()) {
+                    guideWizardPanel_->setDetail(LOC(kExportInProgress) + waitText);
+                    return;
+                }
+                // 書き出し先：最初の歌ファイルと同じフォルダの「OpenTune書き出し」
+                juce::File dir;
+                collectExportTrackJobs(dir);
+                if (dir == juce::File{})
+                    dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
+                dir = dir.getChildFile(juce::String::fromUTF8("OpenTune書き出し"));
+                guideWizardExportDir_ = dir;
+                const auto suffix = juce::String::fromUTF8(pitchOnly ? "_ピッチ修正後" : "_ピッチタイミング修正後");
+                guideWizardExportStarted_ = true;
+                guideWizardExportFinished_ = false;
+                juce::Component::SafePointer<OpenTuneAudioProcessorEditor> safeThis(this);
+                const bool started = startExportAllTracks(dir, suffix, [safeThis](const juce::String& msg, int failed) {
+                    if (safeThis == nullptr)
+                        return;
+                    safeThis->guideWizardExportFinished_ = true;
+                    safeThis->guideWizardExportFailed_ = failed;
+                    safeThis->guideWizardExportMessage_ = msg;
+                });
+                if (!started) {
+                    guideWizardFinish(false, LOC(kExportAllNothing));
+                    return;
+                }
+                guideWizardPanel_->setDetail((pitchOnly ? LOC(kGuideWizDetailExportPitch) : LOC(kGuideWizDetailExportTiming))
+                                             + "\n" + dir.getFullPathName());
+                return;
+            }
+            if (!guideWizardExportFinished_) {
+                guideWizardPanel_->setDetail((pitchOnly ? LOC(kGuideWizDetailExportPitch) : LOC(kGuideWizDetailExportTiming))
+                                             + waitText + "\n" + guideWizardExportDir_.getFullPathName());
+                return;
+            }
+            guideWizardExportStarted_ = false;
+            if (guideWizardExportFailed_ > 0) {
+                guideWizardPanel_->setStepState(pitchOnly ? RowExportPitch : RowExportTiming, GuideWizardPanel::StepState::Failed);
+                guideWizardSummary_ << LOC(kExportAllFailed) << " " << guideWizardExportFailed_ << "\n";
+            } else {
+                done(pitchOnly ? RowExportPitch : RowExportTiming);
+            }
+            if (pitchOnly) {
+                guideWizardSummary_ << LOC(kGuideWizPitchSaved) << "\n";
+                guideWizardSetStep(GuideWizardStep::Timing);
+                return;
+            }
+            guideWizardSummary_ << LOC(kGuideWizTimingSaved) << "\n";
+
+            // 仕上げ：ピアノロールで最初のクリップを開く（他のトラックは薄く重ねて表示される）
             juce::String msg;
-            msg << LOC(kGuideWizDoneTitle) << "\n"
-                << LOC(kGuideBatchSnapDone) << " " << st.clips << " / " << st.moved << "\n"
-                << guideWizardSummary_;
+            msg << LOC(kGuideWizDoneTitle) << "\n" << guideWizardSummary_
+                << LOC(kGuideWizExportFolder) << "\n" << guideWizardExportDir_.getFullPathName() << "\n";
             const auto keys = describeGuideKeys();
             if (keys.isNotEmpty())
                 msg << LOC(kGuideKeys) << ":\n" << keys;
-
-            // ピアノロールで最初のクリップを開く（他のトラックは薄く重ねて表示される）
             const auto targets = collectGuideTargetPlacements(false);
             if (!targets.empty()) {
                 applyPlacementSelectionContext(targets.front().trackId, targets.front().placement.placementId);
@@ -4621,6 +4818,14 @@ void OpenTuneAudioProcessorEditor::guideWizardTick()
             }
             updateGhostClips();
             guideWizardFinish(true, msg);
+            return;
+        }
+        case GuideWizardStep::Timing: {
+            const auto st = runGuideTimingAlign();
+            done(RowTiming);
+            guideWizardSummary_ << LOC(kGuideTimingDone) << " " << st.clips << " / " << st.moved << "\n";
+            guideWizardSetStep(GuideWizardStep::ExportTiming);
+            guideWizardExportStarted_ = false;
             return;
         }
         default:
