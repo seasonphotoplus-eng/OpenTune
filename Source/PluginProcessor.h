@@ -526,7 +526,7 @@ private:
     // single source of truth. Written via setUiZoomPercent (relaxed store); Editor
     // observes via relaxed load. Persisted in OTST v11 / OTSS v3.
     std::atomic<int> uiZoomPercent_{100};
-    int trackHeight_{120};
+    int trackHeight_{72};   // [GuideHarmony] レーンを低めに（多トラックを一覧しやすく）
     
 #if JucePlugin_Build_Standalone
     // 导出错误信息

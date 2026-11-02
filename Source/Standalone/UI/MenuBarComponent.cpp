@@ -170,7 +170,6 @@ juce::PopupMenu MenuBarComponent::getMenuForIndex(int topLevelMenuIndex, const j
                 guideMenu.addItem(GuideClear, LOC(kGuideClear), hasGuide);
                 guideMenu.addSeparator();
                 guideMenu.addItem(GuideBatchSnap, LOC(kGuideBatchSnap), hasGuide);
-                guideMenu.addItem(GuideTimingAlign, LOC(kGuideTimingAlign), hasGuide);
                 guideMenu.addItem(GuideBatchNotes, LOC(kGuideBatchNotes));
                 guideMenu.addItem(GuideSnap, LOC(kGuideSnap), hasGuide);
                 guideMenu.addSeparator();

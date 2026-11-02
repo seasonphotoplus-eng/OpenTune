@@ -2581,7 +2581,7 @@ void ArrangementViewComponent::handleVerticalZoomWheel(float deltaY, bool keepVi
         : 0.0;
     int change = static_cast<int>(deltaY * zoomSensitivity_.verticalZoomFactor * 150);
     change = (change == 0) ? ((deltaY > 0) ? 10 : -10) : change;
-    const int newHeight = juce::jlimit(70, 300, currentHeight + change);
+    const int newHeight = juce::jlimit(70, 160, currentHeight + change);
 
     if (newHeight != currentHeight)
     {

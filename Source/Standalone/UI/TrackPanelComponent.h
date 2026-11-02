@@ -559,8 +559,8 @@ public:
     
     // 轨道高度限制常量
     static constexpr int MIN_TRACK_HEIGHT = 70;   // 最小高度：控件不重叠
-    static constexpr int DEFAULT_TRACK_HEIGHT = 100;  // 默认高度
-    static constexpr int MAX_TRACK_HEIGHT = 300;  // 最大高度：窗口1/3左右
+    static constexpr int DEFAULT_TRACK_HEIGHT = 72;  // 默认高度
+    static constexpr int MAX_TRACK_HEIGHT = 160;  // 最大高度：窗口1/3左右
 
 private:
     bool dispatchPointerBinding(const KeyShortcutConfig::KeyBinding& binding);

@@ -1226,6 +1226,25 @@ void OpenTuneAudioProcessorEditor::filesDropped(const juce::StringArray& files, 
     if (files.isEmpty())
         return;
 
+    // [GuideHarmony] 複数ファイルのドロップ：1ファイル1トラックで、曲頭 0 秒にそろえて並べる
+    if (files.size() > 1)
+    {
+        static const juce::String kMultiExtensionSpec = getImportExtensionSpec();
+        juce::Array<juce::File> audioFiles;
+        for (const auto& path : files)
+        {
+            const juce::File f(path);
+            if (f.existsAsFile() && f.hasFileExtension(kMultiExtensionSpec))
+                audioFiles.add(f);
+        }
+        if (!audioFiles.isEmpty())
+        {
+            audioFiles.sort();
+            importFilesToNewTracks(audioFiles);
+            return;
+        }
+    }
+
     const juce::File file(files[0]);
     if (!file.existsAsFile())
         return;
@@ -4440,7 +4459,7 @@ void OpenTuneAudioProcessorEditor::showAllTracksToggled(bool show)
 // ============================================================================
 namespace {
 enum GuideWizardRow { RowImport = 0, RowAnalysis, RowGuide, RowNotes, RowAlign, RowSnap,
-                      RowExportPitch, RowTiming, RowExportTiming, RowCount };
+                      RowExportPitch, RowCount, RowTiming = RowCount, RowExportTiming = RowCount };
 }
 
 void OpenTuneAudioProcessorEditor::layoutGuideOverlays()
@@ -4593,8 +4612,6 @@ void OpenTuneAudioProcessorEditor::guideWizardStart()
     steps[RowAlign].label    = LOC(kGuideWizStepAlign);
     steps[RowSnap].label     = LOC(kGuideWizStepSnap);
     steps[RowExportPitch].label  = LOC(kGuideWizStepExportPitch);
-    steps[RowTiming].label       = LOC(kGuideWizStepTiming);
-    steps[RowExportTiming].label = LOC(kGuideWizStepExportTiming);
     guideWizardPanel_->setTitle(LOC(kGuideWizard));
     guideWizardPanel_->setSteps(std::move(steps));
     guideWizardPanel_->setFooter(LOC(kGuideWizRunningHint));
@@ -4794,12 +4811,8 @@ void OpenTuneAudioProcessorEditor::guideWizardTick()
             } else {
                 done(pitchOnly ? RowExportPitch : RowExportTiming);
             }
-            if (pitchOnly) {
-                guideWizardSummary_ << LOC(kGuideWizPitchSaved) << "\n";
-                guideWizardSetStep(GuideWizardStep::Timing);
-                return;
-            }
-            guideWizardSummary_ << LOC(kGuideWizTimingSaved) << "\n";
+            // タイミング補正は外した（ピッチ補正の書き出しで完了）
+            guideWizardSummary_ << LOC(kGuideWizPitchSaved) << "\n";
 
             // 仕上げ：ピアノロールで最初のクリップを開く（他のトラックは薄く重ねて表示される）
             juce::String msg;

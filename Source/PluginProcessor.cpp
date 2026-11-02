@@ -2533,7 +2533,7 @@ void OpenTuneAudioProcessor::replayDeferredState() noexcept {
 // ============================================================================
 
 void OpenTuneAudioProcessor::setTrackHeight(int height) {
-    trackHeight_ = height;
+    trackHeight_ = juce::jlimit(70, 160, height);   // [GuideHarmony] 高くしすぎない
 }
 
 #if JucePlugin_Build_Standalone
