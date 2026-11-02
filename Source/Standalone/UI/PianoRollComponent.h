@@ -116,6 +116,8 @@ public:
         virtual bool pointerShortcutRequested(KeyShortcutConfig::ShortcutId /*id*/) { return false; }
         virtual void currentToolChanged(ToolId tool) { (void)tool; }
         virtual void timelineDisplayModeChanged(TimelineDisplayMode mode) { (void)mode; }
+        // [GuideHarmony] 他トラックの薄いノートがクリックされた（そのクリップの編集に切り替える）
+        virtual void ghostClipClicked(int trackId, uint64_t placementId) { (void)trackId; (void)placementId; }
     };
 
     enum class ScrollMode
@@ -226,6 +228,27 @@ public:
     void setGuideVisible(bool visible);
     bool isGuideVisible() const noexcept { return guideVisible_; }
     bool hasGuide() const noexcept { return !guideRawNotes_.empty(); }
+    /** [GuideHarmony] 編集中以外のトラックのクリップ（薄く重ねて表示する）。 */
+    struct GhostClip {
+        ContentKey contentKey;
+        ContentTimelineProjection projection;
+        juce::Colour colour;
+        int trackId = -1;
+        uint64_t placementId = 0;
+        uint64_t notesRevision = 0;
+        bool operator==(const GhostClip& o) const noexcept
+        {
+            return contentKey == o.contentKey && trackId == o.trackId && placementId == o.placementId
+                && notesRevision == o.notesRevision && colour == o.colour
+                && projection.timelineStartSeconds == o.projection.timelineStartSeconds
+                && projection.timelineDurationSeconds == o.projection.timelineDurationSeconds
+                && projection.contentStartSeconds == o.projection.contentStartSeconds;
+        }
+    };
+    void setGhostClips(std::vector<GhostClip> clips);
+    void setShowAllTracks(bool show);
+    bool isShowAllTracks() const noexcept { return showAllTracks_; }
+
     /** お手本の時間ずらし量（秒、+ で遅く）。キー判定・表示・スナップすべてに反映される。 */
     void setGuideOffsetSeconds(double offsetSeconds);
     double getGuideOffsetSeconds() const noexcept { return guideOffsetSeconds_; }
@@ -593,6 +616,11 @@ private:
     std::vector<GuideKeySegment> guideKeySegments_;
     double guideOffsetSeconds_ = 0.0;
     void rebuildGuideFromOffset();
+    std::vector<GhostClip> ghostClips_;
+    bool showAllTracks_ = true;
+    void drawGhostNotes(juce::Graphics& g, const ViewMapper& mapper, float pixelsPerSemitone, int height) const;
+    const GhostClip* hitTestGhostClip(const juce::MouseEvent& e) const;
+    bool hitTestEditedNote(const juce::MouseEvent& e) const;
     bool guideVisible_ = true;
     float computeGuideOctaveShift() const;
     void drawGuideNotes(juce::Graphics& g, const ViewMapper& mapper, float pixelsPerSemitone, int height) const;

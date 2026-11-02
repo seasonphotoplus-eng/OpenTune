@@ -198,6 +198,35 @@ constexpr const char* kExportAllDone = "Exported tracks:";
 constexpr const char* kExportAllFailed = "Failed:";
 constexpr const char* kExportAllNothing = "There are no tracks with audio to export.";
 constexpr const char* kGuideAnalyzingHint = "This can take a while (it waits for vocal analysis to finish). Open a clip in the piano roll to see the guide as grey bars.";
+constexpr const char* kGuideWizardButton = "Auto Correct (one button)";
+constexpr const char* kGuideWizard = "Auto Correct with Guide";
+constexpr const char* kGuideWizardIntro = "Runs everything automatically:\n1. Import the vocal files (one track each)\n2. Load the guide (MELO)\n3. Analyze the vocal pitch\n4. Create notes\n5. Align the guide timing\n6. Snap every track to the guide\n\nHarmony parts (singing different notes than the guide) are left unchanged. Ctrl+Z undoes the correction in one step.";
+constexpr const char* kGuideWizardPickVocals = "Choose vocal files and start";
+constexpr const char* kGuideWizardUseExisting = "Use the tracks already loaded";
+constexpr const char* kGuideWizardPickVocalsTitle = "Choose the vocal files (you can select several)";
+constexpr const char* kGuideWizardPickGuideTitle = "Choose the guide (MELO) file";
+constexpr const char* kShowAllTracks = "Show All Tracks in Piano Roll";
+constexpr const char* kGuideWizStepImport = "Import vocal files";
+constexpr const char* kGuideWizStepAnalysis = "Analyze vocal pitch";
+constexpr const char* kGuideWizStepGuide = "Analyze the guide (MELO)";
+constexpr const char* kGuideWizStepNotes = "Create notes";
+constexpr const char* kGuideWizStepAlign = "Align guide timing";
+constexpr const char* kGuideWizStepSnap = "Snap all tracks to the guide";
+constexpr const char* kGuideWizDetailImport = "Importing vocal files... remaining:";
+constexpr const char* kGuideWizDetailAnalysis = "Analyzing vocal pitch... done:";
+constexpr const char* kGuideWizDetailGuide = "Analyzing the guide (MELO)...";
+constexpr const char* kGuideWizDetailNotes = "Creating notes for every clip...";
+constexpr const char* kGuideWizDetailAlign = "Searching for the best guide timing...";
+constexpr const char* kGuideWizDetailSnap = "Snapping every track to the guide...";
+constexpr const char* kGuideWizSeconds = "s";
+constexpr const char* kGuideWizNoVocals = "There are no vocal clips. Import the vocal files first.";
+constexpr const char* kGuideWizTimeout = "Vocal analysis is taking too long. Please try again.";
+constexpr const char* kGuideWizAnalysisFailed = "Vocal pitch analysis failed for every clip.";
+constexpr const char* kGuideWizAlignSkipped = "Guide timing: not changed (no reliable match found).";
+constexpr const char* kGuideWizDoneTitle = "Done!";
+constexpr const char* kGuideWizRunningHint = "You can keep working while this runs. Closing this panel does not stop it.";
+constexpr const char* kGuideWizRetryHint = "Fix the problem above and press the button again.";
+constexpr const char* kGuideWizTutorial = "How to fine-tune:\n- Grey bars = guide. Faint coloured bars = other tracks (click one to edit that track).\n- Click a note and press Up/Down (or drag) to move it a semitone.\n- Select notes and press Ctrl+Shift+G to snap them to the guide.\n- If the whole guide is off in time: [ / ] = 10 ms, Shift+[ / ] = 100 ms.\n- Ctrl+Z undoes. Playback updates automatically after edits.\n- Export: File > Export Audio > Export All Tracks Separately.";
 constexpr const char* kGuideTiming = "Guide Timing";
 constexpr const char* kGuideAutoAlign = "Auto-align Guide to Vocals";
 constexpr const char* kGuideNudgeEarly10 = "10 ms Earlier  ( [ )";
@@ -587,6 +616,35 @@ inline juce::String get(Language lang, const char* key)
         { Keys::kExportAllFailed, "Failed:", "失败：", "失敗:", "Ошибка:", "Fallos:" },
         { Keys::kExportAllNothing, "There are no tracks with audio to export.", "没有可导出的音轨。", "書き出せるトラックがありません。", "Нет дорожек для экспорта.", "No hay pistas para exportar." },
         { Keys::kGuideAnalyzingHint, "This can take a while (it waits for vocal analysis to finish). Open a clip in the piano roll to see the guide as grey bars.", "可能需要一些时间（会等待人声分析完成）。在钢琴卷帘中打开片段即可看到灰色参考条。", "歌の解析が終わってから解析するので、少し時間がかかることがあります。終わるとキーの一覧が出ます。お手本はピアノロール（クリップをダブルクリック）に灰色の帯で表示されます。", "Это может занять время.", "Puede tardar un poco." },
+        { Keys::kGuideWizardButton, "Auto Correct (one button)", "一键自动修正", "おまかせ補正（ワンボタン）", "Auto Correct (one button)", "Auto Correct (one button)" },
+        { Keys::kGuideWizard, "Auto Correct with Guide", "按参考自动修正", "おまかせ補正", "Auto Correct with Guide", "Auto Correct with Guide" },
+        { Keys::kGuideWizardIntro, "Runs everything automatically:\n1. Import the vocal files (one track each)\n2. Load the guide (MELO)\n3. Analyze the vocal pitch\n4. Create notes\n5. Align the guide timing\n6. Snap every track to the guide\n\nHarmony parts (singing different notes than the guide) are left unchanged. Ctrl+Z undoes the correction in one step.", "自动完成全部步骤：\n1. 导入人声（每个文件一轨）\n2. 载入参考\n3. 分析音高\n4. 生成音符\n5. 对齐参考时间\n6. 全部音轨吸附到参考\n\n和声部分不改动。Ctrl+Z 可一次撤销。", "次の手順を自動で進めます:\n1. 歌のファイルを読み込む（1ファイル1トラック、曲頭にそろえる）\n2. お手本(MELO)を読み込む\n3. 歌の音程を解析する\n4. ノートを作る\n5. お手本の位置を歌に合わせる\n6. 全トラックをお手本の音名に合わせる\n\nハモリ部分（お手本と違う音を歌っている所）は動かしません。補正は Ctrl+Z 1回で元に戻せます。", "Runs everything automatically:\n1. Import the vocal files (one track each)\n2. Load the guide (MELO)\n3. Analyze the vocal pitch\n4. Create notes\n5. Align the guide timing\n6. Snap every track to the guide\n\nHarmony parts (singing different notes than the guide) are left unchanged. Ctrl+Z undoes the correction in one step.", "Runs everything automatically:\n1. Import the vocal files (one track each)\n2. Load the guide (MELO)\n3. Analyze the vocal pitch\n4. Create notes\n5. Align the guide timing\n6. Snap every track to the guide\n\nHarmony parts (singing different notes than the guide) are left unchanged. Ctrl+Z undoes the correction in one step." },
+        { Keys::kGuideWizardPickVocals, "Choose vocal files and start", "选择人声文件并开始", "歌のファイルを選んで開始", "Choose vocal files and start", "Choose vocal files and start" },
+        { Keys::kGuideWizardUseExisting, "Use the tracks already loaded", "使用已导入的音轨", "読み込み済みのトラックで開始", "Use the tracks already loaded", "Use the tracks already loaded" },
+        { Keys::kGuideWizardPickVocalsTitle, "Choose the vocal files (you can select several)", "选择人声文件（可多选）", "歌のファイルを選んでください（複数選べます。ハモリの録音も一緒にどうぞ）", "Choose the vocal files (you can select several)", "Choose the vocal files (you can select several)" },
+        { Keys::kGuideWizardPickGuideTitle, "Choose the guide (MELO) file", "选择参考文件", "お手本(MELO)のファイルを選んでください", "Choose the guide (MELO) file", "Choose the guide (MELO) file" },
+        { Keys::kShowAllTracks, "Show All Tracks in Piano Roll", "在钢琴卷帘中显示全部音轨", "ピアノロールに全トラックを表示", "Show All Tracks in Piano Roll", "Show All Tracks in Piano Roll" },
+        { Keys::kGuideWizStepImport, "Import vocal files", "导入人声", "歌のファイルを読み込む", "Import vocal files", "Import vocal files" },
+        { Keys::kGuideWizStepAnalysis, "Analyze vocal pitch", "分析人声音高", "歌の音程を解析", "Analyze vocal pitch", "Analyze vocal pitch" },
+        { Keys::kGuideWizStepGuide, "Analyze the guide (MELO)", "分析参考", "お手本(MELO)を解析", "Analyze the guide (MELO)", "Analyze the guide (MELO)" },
+        { Keys::kGuideWizStepNotes, "Create notes", "生成音符", "ノートを作成", "Create notes", "Create notes" },
+        { Keys::kGuideWizStepAlign, "Align guide timing", "对齐参考时间", "お手本の位置を合わせる", "Align guide timing", "Align guide timing" },
+        { Keys::kGuideWizStepSnap, "Snap all tracks to the guide", "全部吸附到参考", "全トラックをお手本に合わせる", "Snap all tracks to the guide", "Snap all tracks to the guide" },
+        { Keys::kGuideWizDetailImport, "Importing vocal files... remaining:", "正在导入… 剩余：", "歌のファイルを読み込んでいます… 残り", "Importing vocal files... remaining:", "Importing vocal files... remaining:" },
+        { Keys::kGuideWizDetailAnalysis, "Analyzing vocal pitch... done:", "正在分析音高… 完成：", "歌の音程を解析しています… 完了", "Analyzing vocal pitch... done:", "Analyzing vocal pitch... done:" },
+        { Keys::kGuideWizDetailGuide, "Analyzing the guide (MELO)...", "正在分析参考…", "お手本(MELO)の音程を解析しています…", "Analyzing the guide (MELO)...", "Analyzing the guide (MELO)..." },
+        { Keys::kGuideWizDetailNotes, "Creating notes for every clip...", "正在生成音符…", "全クリップのノートを作っています…", "Creating notes for every clip...", "Creating notes for every clip..." },
+        { Keys::kGuideWizDetailAlign, "Searching for the best guide timing...", "正在对齐参考…", "お手本と歌が一番そろう位置を探しています…", "Searching for the best guide timing...", "Searching for the best guide timing..." },
+        { Keys::kGuideWizDetailSnap, "Snapping every track to the guide...", "正在吸附到参考…", "全トラックをお手本の音名に合わせています…", "Snapping every track to the guide...", "Snapping every track to the guide..." },
+        { Keys::kGuideWizSeconds, "s", "秒", "秒経過", "s", "s" },
+        { Keys::kGuideWizNoVocals, "There are no vocal clips. Import the vocal files first.", "没有人声片段。", "歌のクリップがありません。先に歌のファイルを読み込んでください。", "There are no vocal clips. Import the vocal files first.", "There are no vocal clips. Import the vocal files first." },
+        { Keys::kGuideWizTimeout, "Vocal analysis is taking too long. Please try again.", "分析超时。", "歌の解析に時間がかかりすぎています。もう一度お試しください。", "Vocal analysis is taking too long. Please try again.", "Vocal analysis is taking too long. Please try again." },
+        { Keys::kGuideWizAnalysisFailed, "Vocal pitch analysis failed for every clip.", "所有片段分析失败。", "全てのクリップで歌の音程の解析に失敗しました。", "Vocal pitch analysis failed for every clip.", "Vocal pitch analysis failed for every clip." },
+        { Keys::kGuideWizAlignSkipped, "Guide timing: not changed (no reliable match found).", "参考时间：未改变。", "お手本の位置: そのまま（確かな位置が見つからなかったため）", "Guide timing: not changed (no reliable match found).", "Guide timing: not changed (no reliable match found)." },
+        { Keys::kGuideWizDoneTitle, "Done!", "完成！", "完了しました！", "Done!", "Done!" },
+        { Keys::kGuideWizRunningHint, "You can keep working while this runs. Closing this panel does not stop it.", "处理期间可继续操作。", "実行中も他の操作ができます。このパネルを閉じても処理は続きます（もう一度ボタンを押すと再表示）。", "You can keep working while this runs. Closing this panel does not stop it.", "You can keep working while this runs. Closing this panel does not stop it." },
+        { Keys::kGuideWizRetryHint, "Fix the problem above and press the button again.", "请处理后再按一次按钮。", "上の内容を確認して、もう一度ボタンを押してください。", "Fix the problem above and press the button again.", "Fix the problem above and press the button again." },
+        { Keys::kGuideWizTutorial, "How to fine-tune:\n- Grey bars = guide. Faint coloured bars = other tracks (click one to edit that track).\n- Click a note and press Up/Down (or drag) to move it a semitone.\n- Select notes and press Ctrl+Shift+G to snap them to the guide.\n- If the whole guide is off in time: [ / ] = 10 ms, Shift+[ / ] = 100 ms.\n- Ctrl+Z undoes. Playback updates automatically after edits.\n- Export: File > Export Audio > Export All Tracks Separately.", "微调方法：\n- 灰色=参考，淡色=其他音轨（点击切换）\n- 选中音符按 ↑↓ 移动\n- Ctrl+Shift+G 吸附到参考\n- [ ] 调整参考时间\n- Ctrl+Z 撤销\n- 文件>导出>分别导出全部音轨", "微調整のしかた:\n・灰色の帯＝お手本、薄い色の帯＝他のトラック（クリックするとそのトラックの編集に切り替え）\n・ノートをクリックして ↑↓ キー（またはドラッグ）で半音ずつ動かす\n・ノートを選んで Ctrl+Shift+G でお手本の音名に合わせる\n・お手本全体がずれているとき: [ / ] で 10ms、Shift+[ / ] で 100ms\n・Ctrl+Z で元に戻す。編集すると音は自動で作り直されます\n・書き出し: ファイル → オーディオをエクスポート → 全トラックを個別に書き出し", "How to fine-tune:\n- Grey bars = guide. Faint coloured bars = other tracks (click one to edit that track).\n- Click a note and press Up/Down (or drag) to move it a semitone.\n- Select notes and press Ctrl+Shift+G to snap them to the guide.\n- If the whole guide is off in time: [ / ] = 10 ms, Shift+[ / ] = 100 ms.\n- Ctrl+Z undoes. Playback updates automatically after edits.\n- Export: File > Export Audio > Export All Tracks Separately.", "How to fine-tune:\n- Grey bars = guide. Faint coloured bars = other tracks (click one to edit that track).\n- Click a note and press Up/Down (or drag) to move it a semitone.\n- Select notes and press Ctrl+Shift+G to snap them to the guide.\n- If the whole guide is off in time: [ / ] = 10 ms, Shift+[ / ] = 100 ms.\n- Ctrl+Z undoes. Playback updates automatically after edits.\n- Export: File > Export Audio > Export All Tracks Separately." },
         { Keys::kGuideTiming, "Guide Timing", "参考时间对齐", "お手本の位置調整", "Сдвиг гида", "Ajuste de la guía" },
         { Keys::kGuideAutoAlign, "Auto-align Guide to Vocals", "自动对齐参考", "歌に合わせて自動で位置を合わせる", "Автовыравнивание гида", "Alinear guía automáticamente" },
         { Keys::kGuideNudgeEarly10, "10 ms Earlier  ( [ )", "提前 10 ms  ( [ )", "10ms 早く  ( [ )", "На 10 мс раньше  ( [ )", "10 ms antes  ( [ )" },

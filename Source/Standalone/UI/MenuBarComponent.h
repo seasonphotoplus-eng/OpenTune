@@ -77,6 +77,8 @@ public:
         virtual void guideBatchNotesRequested() {}
         virtual void guideBatchSnapRequested() {}
         virtual void guideShowKeysRequested() {}
+        virtual void guideWizardRequested() {}
+        virtual void showAllTracksToggled(bool show) { juce::ignoreUnused(show); }
         virtual void guideAutoAlignRequested() {}
         virtual void guideNudgeRequested(int milliseconds) { juce::ignoreUnused(milliseconds); }  // 0 = リセット
     };
@@ -96,6 +98,7 @@ public:
     // [GuideHarmony] お手本の有無・表示状態（未注入時は false/true）
     std::function<bool()> hasGuideQuery;
     std::function<bool()> guideVisibleQuery;
+    std::function<bool()> showAllTracksQuery;
 
     void refreshLocalizedText();  // 刷新本地化文本
     void setMouseTrailTheme(MouseTrailConfig::TrailTheme theme) { mouseTrailTheme_ = theme; }
@@ -193,6 +196,8 @@ private:
         GuideBatchSnap,
         GuideShowKeys,
         GuideAutoAlign,
+        GuideWizard,
+        GuideShowAllTracks,
         GuideNudgeEarly10,
         GuideNudgeLate10,
         GuideNudgeEarly100,

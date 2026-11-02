@@ -26,6 +26,7 @@
 #include "UI/TopBarComponent.h"
 #include "UI/TrackPanelComponent.h"
 #include "UI/ArrangementViewComponent.h"
+#include "UI/GuideWizardPanel.h"
 #include "UI/TimelineOverviewComponent.h"
 #include "UI/OpenTuneLookAndFeel.h"
 #include "UI/OpenTuneTooltipWindow.h"
@@ -126,6 +127,10 @@ public:
     void snapToGuideRequested() override;
     void harmonyRequested(int degreeSteps) override;
     void exportAllTracksRequested() override;
+    void guideWizardRequested() override;
+    void showAllTracksToggled(bool show) override;
+    // PianoRollComponent::Listener [GuideHarmony]
+    void ghostClipClicked(int trackId, uint64_t placementId) override;
     void guideBatchNotesRequested() override;
     void guideBatchSnapRequested() override;
     void guideShowKeysRequested() override;
@@ -287,6 +292,30 @@ private:
     };
     std::vector<GuidePlacementRef> collectGuideTargetPlacements(bool includeHarmony) const;
     juce::String describeGuideKeys() const;
+    struct GuideBatchStats { int created = 0, hadNotes = 0, notReady = 0, clips = 0, moved = 0; };
+    GuideBatchStats runGuideBatchNotes();
+    GuideBatchStats runGuideBatchSnap();
+    bool runGuideAutoAlign(double& offsetOut, double& confidenceOut);
+    void startGuideImport(const juce::File& file, bool interactive);
+    juce::String guideLastError_;
+
+    // ---- [GuideHarmony] おまかせ補正（ワンボタン）----
+    enum class GuideWizardStep { Idle, WaitImport, WaitAnalysis, WaitGuide, Notes, Align, Snap, Done, Failed };
+    GuideWizardStep guideWizardStep_ = GuideWizardStep::Idle;
+    double guideWizardStepStartMs_ = 0.0;
+    juce::String guideWizardSummary_;
+    std::unique_ptr<juce::TextButton> guideWizardButton_;
+    std::unique_ptr<GuideWizardPanel> guideWizardPanel_;
+    void guideWizardChooseVocals();
+    void guideWizardChooseGuideThenStart();
+    void guideWizardStart();
+    void guideWizardSetStep(GuideWizardStep step);
+    void guideWizardTick();
+    void guideWizardFinish(bool ok, const juce::String& message);
+    void importFilesToNewTracks(const juce::Array<juce::File>& files);
+    void layoutGuideOverlays();
+    void updateGhostClips();
+    int ghostClipsTick_ = 0;
     bool isImportInProgress_ = false;
     
     // 多文件导入队列（解决并发导入问题）

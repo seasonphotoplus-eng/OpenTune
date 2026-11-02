@@ -2710,6 +2710,10 @@ void PianoRollComponent::drawContent(juce::Graphics& g, const ViewportState& vie
     if (guideVisible_ && !guideNotes_.empty())
         drawGuideNotes(g, mapper, static_cast<float>(view.pixelsPerSemitone), ch);
 
+    // [GuideHarmony] 他トラックのノート（トラック色で薄く）
+    if (showAllTracks_ && !ghostClips_.empty())
+        drawGhostNotes(g, mapper, static_cast<float>(view.pixelsPerSemitone), ch);
+
     for (const auto& item : renderCtx.contents)
         renderer_->drawNotes(g, renderCtx, item);
 
@@ -4631,6 +4635,16 @@ void PianoRollComponent::mouseDoubleClick(const juce::MouseEvent& e) {
 void PianoRollComponent::mouseDown(const juce::MouseEvent& e) {
     if (TouchInput::isFingerPress(e) && beginFingerPress(e))
         return;
+    // [GuideHarmony] 他トラックの薄いノートをクリック → そのクリップの編集に切り替え
+    if (showAllTracks_ && !ghostClips_.empty() && e.mods.isLeftButtonDown()
+        && !e.mods.isAnyModifierKeyDown() && !hitTestEditedNote(e)) {
+        if (const auto* ghost = hitTestGhostClip(e)) {
+            const int trackId = ghost->trackId;
+            const uint64_t placementId = ghost->placementId;
+            listeners_.call([trackId, placementId](Listener& l) { l.ghostClipClicked(trackId, placementId); });
+            return;
+        }
+    }
     dispatchMouseDown(e);
 }
 
@@ -6428,5 +6442,104 @@ bool PianoRollComponent::shiftContentNotesDiatonic(ContentKey key, int degreeSte
         LOC_RAW("Create harmony"));
 }
 
+
+
+// ============================================================================
+// [GuideHarmony] 全トラック表示（他トラックのノートを薄く重ねる）
+// ============================================================================
+void PianoRollComponent::setGhostClips(std::vector<GhostClip> clips)
+{
+    if (clips == ghostClips_)
+        return;
+    ghostClips_ = std::move(clips);
+    if (showAllTracks_)
+        requestContentRedraw();
+}
+
+void PianoRollComponent::setShowAllTracks(bool show)
+{
+    if (showAllTracks_ == show)
+        return;
+    showAllTracks_ = show;
+    requestContentRedraw();
+}
+
+void PianoRollComponent::drawGhostNotes(juce::Graphics& g, const ViewMapper& mapper,
+                                        float pixelsPerSemitone, int height) const
+{
+    const auto clip = g.getClipBounds();
+    for (const auto& ghost : ghostClips_) {
+        if (ghost.contentKey == editedContentKey_ || !ghost.projection.isValid())
+            continue;
+        const auto snap = readSnapshotFor(ghost.contentKey);
+        if (snap == nullptr || snap->notes.empty())
+            continue;
+        const auto grid = snap->timeGrid;
+        const auto fill = ghost.colour.withAlpha(0.32f);
+        const auto edge = ghost.colour.withAlpha(0.75f);
+        for (const auto& note : snap->notes) {
+            const float pitch = note.getAdjustedPitch();
+            if (pitch <= 0.0f)
+                continue;
+            const double t0 = ghost.projection.projectContentTimeToTimeline(grid->tauForward(note.startTime));
+            const double t1 = ghost.projection.projectContentTimeToTimeline(grid->tauForward(note.endTime));
+            const int x1 = mapper.timeToX(t0);
+            const int x2 = mapper.timeToX(t1);
+            if (x2 < clip.getX() || x1 > clip.getRight())
+                continue;
+            const float y = mapper.midiToY(mapper.freqToMidi(pitch)) - pixelsPerSemitone * 0.5f;
+            if (y > static_cast<float>(height) || y + pixelsPerSemitone < 0.0f)
+                continue;
+            juce::Rectangle<float> r(static_cast<float>(x1), y + 1.0f,
+                                     static_cast<float>(std::max(2, x2 - x1)), std::max(2.0f, pixelsPerSemitone - 2.0f));
+            g.setColour(fill);
+            g.fillRoundedRectangle(r, 2.0f);
+            g.setColour(edge);
+            g.drawRoundedRectangle(r, 2.0f, 1.0f);
+        }
+    }
+}
+
+bool PianoRollComponent::hitTestEditedNote(const juce::MouseEvent& e) const
+{
+    const auto mapper = makeViewMapper();
+    const float mouseMidi = mapper.freqToMidi(mapper.yToFreq(static_cast<float>(e.y - rulerHeight_)));
+    for (const auto& note : cachedNotes_) {
+        const float pitch = note.getAdjustedPitch();
+        if (pitch <= 0.0f || std::abs(mapper.freqToMidi(pitch) - mouseMidi) > 0.5f)
+            continue;
+        const int x1 = sourceTimeToX(note.startTime);
+        const int x2 = sourceTimeToX(note.endTime);
+        if (e.x >= std::min(x1, x2) && e.x <= std::max(x1, x2))
+            return true;
+    }
+    return false;
+}
+
+const PianoRollComponent::GhostClip* PianoRollComponent::hitTestGhostClip(const juce::MouseEvent& e) const
+{
+    if (e.x < getTimelineContentStartX() || e.y < rulerHeight_)
+        return nullptr;
+    const auto mapper = makeViewMapper();
+    const float mouseMidi = mapper.freqToMidi(mapper.yToFreq(static_cast<float>(e.y - rulerHeight_)));
+    for (const auto& ghost : ghostClips_) {
+        if (ghost.contentKey == editedContentKey_ || !ghost.projection.isValid())
+            continue;
+        const auto snap = readSnapshotFor(ghost.contentKey);
+        if (snap == nullptr)
+            continue;
+        const auto grid = snap->timeGrid;
+        for (const auto& note : snap->notes) {
+            const float pitch = note.getAdjustedPitch();
+            if (pitch <= 0.0f || std::abs(mapper.freqToMidi(pitch) - mouseMidi) > 0.5f)
+                continue;
+            const int x1 = mapper.timeToX(ghost.projection.projectContentTimeToTimeline(grid->tauForward(note.startTime)));
+            const int x2 = mapper.timeToX(ghost.projection.projectContentTimeToTimeline(grid->tauForward(note.endTime)));
+            if (e.x >= std::min(x1, x2) && e.x <= std::max(x1, x2))
+                return &ghost;
+        }
+    }
+    return nullptr;
+}
 
 } // namespace OpenTune

@@ -150,8 +150,12 @@ juce::PopupMenu MenuBarComponent::getMenuForIndex(int topLevelMenuIndex, const j
                 const bool guideVisible = guideVisibleQuery ? guideVisibleQuery() : true;
                 menu.addSeparator();
                 juce::PopupMenu guideMenu;
+                guideMenu.addItem(GuideWizard, LOC(kGuideWizard));
+                guideMenu.addSeparator();
                 guideMenu.addItem(GuideImport, LOC(kGuideImport));
                 guideMenu.addItem(GuideShow, LOC(kGuideShow), hasGuide, guideVisible);
+                guideMenu.addItem(GuideShowAllTracks, LOC(kShowAllTracks), true,
+                                  showAllTracksQuery ? showAllTracksQuery() : true);
                 guideMenu.addItem(GuideShowKeys, LOC(kGuideKeys), hasGuide);
                 juce::PopupMenu nudgeMenu;
                 nudgeMenu.addItem(GuideAutoAlign, LOC(kGuideAutoAlign), hasGuide);
@@ -323,6 +327,15 @@ void MenuBarComponent::menuItemSelected(int menuItemID, int topLevelMenuIndex)
         case GuideBatchSnap:
             listeners_.call([](Listener& l) { l.guideBatchSnapRequested(); });
             break;
+        case GuideWizard:
+            listeners_.call([](Listener& l) { l.guideWizardRequested(); });
+            break;
+        case GuideShowAllTracks:
+        {
+            const bool next = !(showAllTracksQuery ? showAllTracksQuery() : true);
+            listeners_.call([next](Listener& l) { l.showAllTracksToggled(next); });
+            break;
+        }
         case GuideAutoAlign:
             listeners_.call([](Listener& l) { l.guideAutoAlignRequested(); });
             break;
