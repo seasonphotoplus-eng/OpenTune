@@ -371,6 +371,7 @@ private:
 
     ThemeId appliedThemeId_ = ThemeId::Aurora;
     Language appliedLanguage_ = Language::Chinese;
+    int appliedTrackHeightPreference_ = -1;
     bool inferenceActive_ = false;
     int inferenceActiveTickCounter_ = 0;
     ContentKey lastPianoRollContentKey_;

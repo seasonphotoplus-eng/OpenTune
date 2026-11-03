@@ -723,7 +723,7 @@ private:
     };
 
 public:
-    static constexpr int kContentHeight = 266;
+    static constexpr int kContentHeight = 314;
 
     SharedVisualPage(AppPreferences& appPreferences, std::function<void()> onPreferencesChanged)
         : appPreferences_(appPreferences)
@@ -767,6 +767,18 @@ public:
         };
         initialiseSlider(backgroundBrightnessSlider_);
         addAndMakeVisible(backgroundBrightnessSlider_);
+
+        // [GuideHarmony] トラック（レーン）の高さ
+        initialiseLabel(trackHeightLabel_, LOC(kTrackHeight));
+        addAndMakeVisible(trackHeightLabel_);
+        trackHeightSlider_.setRange(70.0, 160.0, 1.0);
+        trackHeightSlider_.setValue(appPreferences_.getState().shared.trackHeight, juce::dontSendNotification);
+        trackHeightSlider_.onValueChange = [this] {
+            appPreferences_.setTrackHeight(static_cast<int>(trackHeightSlider_.getValue()));
+            notifyChanged();
+        };
+        initialiseSlider(trackHeightSlider_);
+        addAndMakeVisible(trackHeightSlider_);
 
         initialiseLabel(correctedF0ColourLabel_, LOC(kCorrectedF0Colour));
         addAndMakeVisible(correctedF0ColourLabel_);
@@ -819,6 +831,11 @@ public:
         auto brightnessRow = bounds.removeFromTop(rowHeight);
         backgroundBrightnessLabel_.setBounds(brightnessRow.removeFromLeft(labelWidth));
         backgroundBrightnessSlider_.setBounds(brightnessRow.reduced(0, 4));
+
+        bounds.removeFromTop(14);
+        auto heightRow = bounds.removeFromTop(rowHeight);
+        trackHeightLabel_.setBounds(heightRow.removeFromLeft(labelWidth));
+        trackHeightSlider_.setBounds(heightRow.reduced(0, 4));
 
         bounds.removeFromTop(14);
         auto colourRow = bounds.removeFromTop(rowHeight);
@@ -897,6 +914,8 @@ private:
     juce::ToggleButton showUnvoicedFramesToggle_;
     juce::Label backgroundBrightnessLabel_;
     juce::Slider backgroundBrightnessSlider_;
+    juce::Label trackHeightLabel_;
+    juce::Slider trackHeightSlider_;
     juce::Label correctedF0ColourLabel_;
     ColourSwatchButton correctedF0ColourButton_;
     juce::Label originalF0ColourLabel_;

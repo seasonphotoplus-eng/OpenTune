@@ -16,6 +16,7 @@ constexpr const char* kSharedPianoRollShowUnvoicedFramesKey = "shared.pianoRoll.
 constexpr const char* kSharedPianoRollShowPianoKeyboardKey = "shared.pianoRoll.showPianoKeyboard";
 constexpr const char* kSharedPianoRollScaleAssistEnabledKey = "shared.pianoRoll.scaleAssistEnabled";
 constexpr const char* kSharedPianoRollBackgroundBrightnessKey = "shared.pianoRoll.backgroundBrightness";
+constexpr const char* kSharedTrackHeightKey = "shared.trackHeight";
 constexpr const char* kSharedPianoRollCorrectedF0ColourKey = "shared.pianoRoll.correctedF0Colour";
 constexpr const char* kSharedPianoRollOriginalF0ColourKey = "shared.pianoRoll.originalF0Colour";
 constexpr const char* kSharedZoomHorizontalFactorKey = "shared.zoom.horizontalFactor";
@@ -452,6 +453,7 @@ AppPreferencesState loadStateFromProperties(const juce::PropertiesFile& properti
         kSharedEqSuppressRemoveConfirmationKey,
         state.shared.suppressEqRemoveConfirmation);
     state.shared.onboardingShown = properties.getBoolValue(kSharedOnboardingShownKey, state.shared.onboardingShown);
+    state.shared.trackHeight = juce::jlimit(70, 160, properties.getIntValue(kSharedTrackHeightKey, state.shared.trackHeight));
     state.shared.snap.enabled = properties.getBoolValue(kSharedSnapEnabledKey, false);
     state.shared.snap.mode = static_cast<SnapSettings::Mode>(
         properties.getIntValue(kSharedSnapModeKey, static_cast<int>(SnapSettings::Mode::Off)));
@@ -520,6 +522,7 @@ void writeStateToProperties(juce::PropertiesFile& properties, const AppPreferenc
     properties.setValue(kSharedEqSuppressRemoveConfirmationKey,
                         state.shared.suppressEqRemoveConfirmation);
     properties.setValue(kSharedOnboardingShownKey, state.shared.onboardingShown);
+    properties.setValue(kSharedTrackHeightKey, state.shared.trackHeight);
     properties.setValue(kSharedSnapEnabledKey, state.shared.snap.enabled);
     properties.setValue(kSharedSnapModeKey, static_cast<int>(state.shared.snap.mode));
     properties.setValue(kSharedTrackColorModeKey, toTrackColorModeToken(state.shared.trackColorMode));
@@ -648,6 +651,13 @@ void AppPreferences::setShowUnvoicedFrames(bool shouldShow)
 {
     const std::lock_guard<std::mutex> lock(mutex_);
     state_.shared.pianoRollVisualPreferences.showUnvoicedFrames = shouldShow;
+    saveLocked();
+}
+
+void AppPreferences::setTrackHeight(int height)
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    state_.shared.trackHeight = juce::jlimit(70, 160, height);
     saveLocked();
 }
 

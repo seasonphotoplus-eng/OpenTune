@@ -1958,6 +1958,15 @@ void OpenTuneAudioProcessorEditor::syncSharedAppPreferences()
     if (auto* arrangement = processorRef_.getStandaloneArrangement())
         arrangement->setLanguage(sharedPreferences.language);
 
+    // [GuideHarmony] 環境設定のトラックの高さ（変わった時だけ反映。Shift+ホイールの調整を上書きしない）
+    if (appliedTrackHeightPreference_ != sharedPreferences.trackHeight) {
+        appliedTrackHeightPreference_ = sharedPreferences.trackHeight;
+        if (processorRef_.getTrackHeight() != sharedPreferences.trackHeight) {
+            trackHeightChanged(sharedPreferences.trackHeight);
+            arrangementView_.requestContentRedraw();
+        }
+    }
+
     if (appliedLanguage_ != sharedPreferences.language) {
         appliedLanguage_ = sharedPreferences.language;
         LocalizationManager::getInstance().notifyLanguageChanged(sharedPreferences.language);
@@ -3382,6 +3391,8 @@ void OpenTuneAudioProcessorEditor::trackVolumeChanged(int trackId, float volume)
 // Y-axis zoom sync: when TrackPanel or ArrangementView zooms via Ctrl+scrollwheel, sync the other component
 void OpenTuneAudioProcessorEditor::trackHeightPresetSelected(int height)
 {
+    appPreferences_.setTrackHeight(height);
+    appliedTrackHeightPreference_ = juce::jlimit(70, 160, height);
     trackHeightChanged(height);
     arrangementView_.requestContentRedraw();
     projectSession_.markDirty();

@@ -68,6 +68,7 @@ struct SharedPreferencesState {
     TrackColorMode trackColorMode = TrackColorMode::Random;
     KeyShortcutConfig::KeyShortcutSettings shortcuts = KeyShortcutConfig::KeyShortcutSettings::getDefault();
     bool suppressEqRemoveConfirmation = false;  ///< 抑制 EQ 工具删除确认弹窗
+    int trackHeight = 72;  ///< [GuideHarmony] トラック（レーン）の高さ（70〜160）
     bool lightPitchCorrectionEnabled = true;  ///< 轻量修音开关（AutoTune cycle resampling，默认开）
     bool onboardingShown = false;
     F0ModelType f0ModelType = F0ModelType::FCPE;
@@ -113,6 +114,7 @@ public:
     void setScaleAssistEnabled(bool enabled);
     void setShowUnvoicedFrames(bool shouldShow);
     void setBackgroundBrightness(float brightness);
+    void setTrackHeight(int height);
     void setCorrectedF0Colour(std::uint32_t colour);
     void setOriginalF0Colour(std::uint32_t colour);
     void setZoomSensitivity(const ZoomSensitivityConfig::ZoomSensitivitySettings& zoomSensitivity);
