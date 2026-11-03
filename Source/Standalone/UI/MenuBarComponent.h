@@ -74,6 +74,7 @@ public:
         virtual void snapToGuideRequested() {}
         virtual void harmonyRequested(int degreeSteps) { juce::ignoreUnused(degreeSteps); }
         virtual void exportAllTracksRequested() {}
+        virtual void trackHeightPresetSelected(int height) { juce::ignoreUnused(height); }
         virtual void guideBatchNotesRequested() {}
         virtual void guideBatchSnapRequested() {}
         virtual void guideShowKeysRequested() {}
@@ -190,6 +191,10 @@ private:
 
         // [GuideHarmony]
         ExportAllTracks = 290,
+        TrackHeightSmall = 291,
+        TrackHeightMedium,
+        TrackHeightLarge,
+        TrackHeightHint,
         GuideImport = 300,
         GuideClear,
         GuideShow,

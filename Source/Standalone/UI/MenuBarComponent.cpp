@@ -199,6 +199,18 @@ juce::PopupMenu MenuBarComponent::getMenuForIndex(int topLevelMenuIndex, const j
             menu.addSubMenu(LOC(kNoteLabels), noteLabelMenu);
             menu.addItem(ShowUnvoicedFrames, LOC(kShowUnvoicedFrames), true, showUnvoicedFrames_);
 
+            // [GuideHarmony] トラック（レーン）の高さ：選択式（Shift+ホイールで自由に変更も可）
+            {
+                juce::PopupMenu heightMenu;
+                const int h = processor_.getTrackHeight();
+                heightMenu.addItem(TrackHeightSmall,  LOC(kTrackHeightSmall),  true, h <= 75);
+                heightMenu.addItem(TrackHeightMedium, LOC(kTrackHeightMedium), true, h > 75 && h <= 110);
+                heightMenu.addItem(TrackHeightLarge,  LOC(kTrackHeightLarge),  true, h > 110);
+                heightMenu.addSeparator();
+                heightMenu.addItem(TrackHeightHint, LOC(kTrackHeightHint), false, false);
+                menu.addSubMenu(LOC(kTrackHeight), heightMenu);
+            }
+
             juce::PopupMenu themeMenu;
             // themeMenu.addItem(ThemeBlueBreeze, LOC(kThemeBlueBreeze), true, UIColors::currentThemeId() == ThemeId::BlueBreeze);  // 临时隐藏
             // themeMenu.addItem(ThemeDarkBlueGrey, LOC(kThemeDarkBlueGrey), true, UIColors::currentThemeId() == ThemeId::DarkBlueGrey); // 临时隐藏
@@ -319,6 +331,9 @@ void MenuBarComponent::menuItemSelected(int menuItemID, int topLevelMenuIndex)
         case GuideSnap:
             listeners_.call([](Listener& l) { l.snapToGuideRequested(); });
             break;
+        case TrackHeightSmall:  listeners_.call([](Listener& l) { l.trackHeightPresetSelected(70); });  break;
+        case TrackHeightMedium: listeners_.call([](Listener& l) { l.trackHeightPresetSelected(100); }); break;
+        case TrackHeightLarge:  listeners_.call([](Listener& l) { l.trackHeightPresetSelected(150); }); break;
         case ExportAllTracks:
             listeners_.call([](Listener& l) { l.exportAllTracksRequested(); });
             break;

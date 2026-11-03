@@ -3380,6 +3380,13 @@ void OpenTuneAudioProcessorEditor::trackVolumeChanged(int trackId, float volume)
 }
 
 // Y-axis zoom sync: when TrackPanel or ArrangementView zooms via Ctrl+scrollwheel, sync the other component
+void OpenTuneAudioProcessorEditor::trackHeightPresetSelected(int height)
+{
+    trackHeightChanged(height);
+    arrangementView_.requestContentRedraw();
+    projectSession_.markDirty();
+}
+
 void OpenTuneAudioProcessorEditor::trackHeightChanged(int newHeight)
 {
 // Update track height in processor

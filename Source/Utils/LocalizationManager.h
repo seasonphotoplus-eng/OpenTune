@@ -241,6 +241,11 @@ constexpr const char* kGuideWizDetailExportTiming = "Exporting the pitch + timin
 constexpr const char* kGuideWizPitchSaved = "Saved: *_ピッチ修正後.wav (pitch only)";
 constexpr const char* kGuideWizTimingSaved = "Saved: *_ピッチタイミング修正後.wav (pitch + timing)";
 constexpr const char* kGuideWizExportFolder = "Export folder:";
+constexpr const char* kTrackHeight = "Track Height";
+constexpr const char* kTrackHeightSmall = "Small";
+constexpr const char* kTrackHeightMedium = "Medium";
+constexpr const char* kTrackHeightLarge = "Large";
+constexpr const char* kTrackHeightHint = "Shift + mouse wheel on the tracks: any height";
 constexpr const char* kGuideTiming = "Guide Timing";
 constexpr const char* kGuideAutoAlign = "Auto-align Guide to Vocals";
 constexpr const char* kGuideNudgeEarly10 = "10 ms Earlier  ( [ )";
@@ -673,6 +678,11 @@ inline juce::String get(Language lang, const char* key)
         { Keys::kGuideWizPitchSaved, "Saved: *_ピッチ修正後.wav (pitch only)", "已保存：仅音高版", "保存: ○○_ピッチ修正後.wav", "Saved: *_ピッチ修正後.wav (pitch only)", "Saved: *_ピッチ修正後.wav (pitch only)" },
         { Keys::kGuideWizTimingSaved, "Saved: *_ピッチタイミング修正後.wav (pitch + timing)", "已保存：音高+时间版", "保存: ○○_ピッチタイミング修正後.wav（ピッチ＋タイミング）", "Saved: *_ピッチタイミング修正後.wav (pitch + timing)", "Saved: *_ピッチタイミング修正後.wav (pitch + timing)" },
         { Keys::kGuideWizExportFolder, "Export folder:", "导出文件夹：", "書き出し先フォルダ:", "Export folder:", "Export folder:" },
+        { Keys::kTrackHeight, "Track Height", "音轨高度", "トラックの高さ", "Track Height", "Track Height" },
+        { Keys::kTrackHeightSmall, "Small", "小", "小（低い）", "Small", "Small" },
+        { Keys::kTrackHeightMedium, "Medium", "中", "中", "Medium", "Medium" },
+        { Keys::kTrackHeightLarge, "Large", "大", "大（高い）", "Large", "Large" },
+        { Keys::kTrackHeightHint, "Shift + mouse wheel on the tracks: any height", "在音轨上 Shift+滚轮：自由调整", "トラック上で Shift＋ホイール：好きな高さに", "Shift + mouse wheel on the tracks: any height", "Shift + mouse wheel on the tracks: any height" },
         { Keys::kGuideTiming, "Guide Timing", "参考时间对齐", "お手本の位置調整", "Сдвиг гида", "Ajuste de la guía" },
         { Keys::kGuideAutoAlign, "Auto-align Guide to Vocals", "自动对齐参考", "歌に合わせて自動で位置を合わせる", "Автовыравнивание гида", "Alinear guía automáticamente" },
         { Keys::kGuideNudgeEarly10, "10 ms Earlier  ( [ )", "提前 10 ms  ( [ )", "10ms 早く  ( [ )", "На 10 мс раньше  ( [ )", "10 ms antes  ( [ )" },

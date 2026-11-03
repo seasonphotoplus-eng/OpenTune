@@ -127,6 +127,7 @@ public:
     void snapToGuideRequested() override;
     void harmonyRequested(int degreeSteps) override;
     void exportAllTracksRequested() override;
+    void trackHeightPresetSelected(int height) override;
     void guideWizardRequested() override;
     void showAllTracksToggled(bool show) override;
     // PianoRollComponent::Listener [GuideHarmony]
