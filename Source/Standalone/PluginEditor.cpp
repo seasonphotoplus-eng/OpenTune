@@ -4188,7 +4188,8 @@ bool OpenTuneAudioProcessorEditor::startExportAllTracks(const juce::File& dir, c
     exportInProgress_.store(true);
     juce::Component::SafePointer<OpenTuneAudioProcessorEditor> safeThis(this);
 
-    exportWorker_ = std::thread([processor, targets, safeThis, exportLanguage, onDone, dirPath = dir.getFullPathName()]()
+    exportWorker_ = std::thread([processor, targets, safeThis, exportLanguage, onDone, mixSuffix = suffix,
+                                 dirPath = dir.getFullPathName()]()
     {
         juce::StringArray okNames, failLines;
         for (const auto& [trackId, file] : targets) {
@@ -4197,6 +4198,15 @@ bool OpenTuneAudioProcessorEditor::startExportAllTracks(const juce::File& dir, c
                 okNames.add(file.getFileName());
             else
                 failLines.add(file.getFileName() + " : " + processor->getLastExportError());
+        }
+        // 全トラックを混ぜた MIX（ミュート中のトラック＝お手本は含まない。ソロがあればソロのみ）
+        if (!targets.empty()) {
+            const auto mixFile = targets.front().second.getParentDirectory()
+                .getChildFile(juce::String::fromUTF8("全トラックMIX") + mixSuffix + ".wav");
+            if (processor->exportMasterMixAudio(mixFile, exportLanguage))
+                okNames.add(mixFile.getFileName());
+            else
+                failLines.add(mixFile.getFileName() + " : " + processor->getLastExportError());
         }
         juce::MessageManager::callAsync([safeThis, okNames, failLines, dirPath, onDone]()
         {

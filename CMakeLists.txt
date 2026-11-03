@@ -1295,6 +1295,8 @@ endif()
 # 社区声码器权重（默认）
 set(HIFIGAN_MODEL_COMMUNITY "${CMAKE_CURRENT_SOURCE_DIR}/pc_nsf_hifigan_44.1k_ONNX/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.onnx")
 set(FCPE_MODEL              "${CMAKE_CURRENT_SOURCE_DIR}/models/fcpe.onnx")
+# [GuideHarmony] ボコーダーの sidecar（ブレス等の無声部分は元音を使うハイブリッド合成を有効化）
+set(HIFIGAN_SIDECAR         "${CMAKE_CURRENT_SOURCE_DIR}/Resources/vocoder/hifigan.yaml")
 
 # --- ONNX Runtime library copying ---
 if(WIN32)
@@ -1335,6 +1337,9 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${HIFIGAN_MODEL_COMMUNITY}"
             "$<TARGET_FILE_DIR:OpenTuneStandalone_Standalone>/models/hifigan.onnx"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${HIFIGAN_SIDECAR}"
+            "$<TARGET_FILE_DIR:OpenTuneStandalone_Standalone>/models/hifigan.yaml"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${FCPE_MODEL}"
             "$<TARGET_FILE_DIR:OpenTuneStandalone_Standalone>/models/fcpe.onnx"
@@ -1519,6 +1524,9 @@ if(TARGET OpenTune_VST3)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${HIFIGAN_MODEL_COMMUNITY}"
                 "$<TARGET_FILE_DIR:OpenTune_VST3>/models/hifigan.onnx"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${HIFIGAN_SIDECAR}"
+                "$<TARGET_FILE_DIR:OpenTune_VST3>/models/hifigan.yaml"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${FCPE_MODEL}"
                 "$<TARGET_FILE_DIR:OpenTune_VST3>/models/fcpe.onnx"

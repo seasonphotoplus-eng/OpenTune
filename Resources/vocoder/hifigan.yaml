@@ -1,0 +1,4 @@
+# [GuideHarmony] ボコーダーの設定（models/hifigan.onnx の横に models/hifigan.yaml として置く）
+# ブレス・子音など無声部分は元の録音を使い、声（有声部分）だけを AI で再合成する
+# ハイブリッド合成を有効にする。無効だとブレスまで再合成されて異音になることがある。
+needs_high_frequency_original: true
